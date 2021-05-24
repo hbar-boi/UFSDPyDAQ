@@ -2,6 +2,7 @@ import pyvisa as pv
 import time
 
 ALLOWED_VOLTAGE_DELTA = 1.5 # Volt
+TIME_DELAY = 0.5 # s
 
 class HighVoltage():
 
@@ -20,7 +21,7 @@ class HighVoltage():
         except:
             return
 
-        self.handle.query_delay = 0.5 # s
+        self.handle.query_delay = TIME_DELAY
 
         while True:
             status = self.getQuery("BDCTR")
@@ -32,6 +33,7 @@ class HighVoltage():
         self.model = self.getQuery("BDNAME")
 
     def setQuery(self, param, channel, value = None):
+        time.sleep(TIME_DELAY)
         if value == None:
             cmd = "$BD:{},CMD:SET,CH:{},PAR:{}".format(self.board,
                 channel, param)

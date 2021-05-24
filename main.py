@@ -12,6 +12,7 @@ HIGHVOLTAGE_MODELS = ["DT1471ET"]
 CONFIG = {}
 
 def init():
+    # PyUSB acts weird if we try to connect the digitizer first...
     hv = connectHighVoltage()
 
     dgt = connectDigitizer()
@@ -26,9 +27,7 @@ def init():
     dgt.allocateEvent()
     dgt.mallocBuffer()
 
-    start(dgt, hv)
-
-    cleanup(dgt, hv)
+    return dgt, hv
 
 PROGRESS_TICK = 4
 
@@ -41,20 +40,19 @@ def start(dgt, hv):
     dir = os.path.join(CONFIG["DATA_PATH"], dir)
     os.mkdir(dir)
 
-    print("\nWaiting for power supply... ", end = "")
+    hv.enableChannel(CONFIG["SENSOR_CHANNEL"])
     hv.enableChannel(CONFIG["TRIGGER_CHANNEL"])
+    print("\nWaiting for power supply... ", end = "")
     hv.setVoltage(CONFIG["TRIGGER_CHANNEL"], CONFIG["TRIGGER_BIAS"], True)
-    print("Ready!", end = "\n\n")
+    print("Ready!")
     input("Press enter to start acquisition...")
 
-    print("\n")
     max = CONFIG["MAX_EVENTS"]
     for bias in CONFIG["SENSOR_BIAS"]:
-        print("Now acquiring {} events with sensor bias at {} V".format(
+        print("\nNow acquiring {} events with sensor bias at {} V".format(
             max, bias))
 
         print("Waiting for power supply... ", end = "")
-        hv.enableChannel(CONFIG["SENSOR_CHANNEL"])
         hv.setVoltage(CONFIG["SENSOR_CHANNEL"], bias, True)
         print("Ready!", end = "\n\n")
 
@@ -62,6 +60,7 @@ def start(dgt, hv):
         events = 0
         file = "{} - {}.txt".format(bias, now())
         path = os.path.join(dir, file)
+
         with open(path, "ab") as out:
             dgt.startAcquisition()
             while events <= max:
@@ -71,10 +70,12 @@ def start(dgt, hv):
                     progress += int(max / PROGRESS_TICK)
 
                 if abort:
-                    print("Abort signal caught, starting cleanup...",
+                    print("Abort signal received, starting cleanup...",
                         end = "\n\n")
-                    cleanup()
+                    dgt.stopAcquisition()
+                    cleanup(dgt, hv)
                     exit()
+
             dgt.stopAcquisition()
 
         os.rename(path, "{} to {}.txt".format(path[:-4], now()))
@@ -119,18 +120,18 @@ def acquire(dgt, file):
     return num
 
 def cleanup(dgt, hv):
-    print("Digitizer cleanup... ", end = "")
+    print("\nDigitizer cleanup... ", end = "")
     dgt.stopAcquisition()
     dgt.freeEvent()
     dgt.freeBuffer()
-    print("Done!", end = "\n\n")
+    print("Done!")
     print("Closing connection to digitizer... ", end = "")
     dgt.close()
     print("Done!", end = "\n\n")
     print("Power supply cleanup... ", end = "")
     hv.disableChannel(CONFIG["SENSOR_CHANNEL"])
     hv.disableChannel(CONFIG["TRIGGER_CHANNEL"])
-    print("Done!", end = "\n\n")
+    print("Done!")
     print("Closing connection to power supply... ", end = "")
     print("Done!", end = "\n\n")
 
@@ -250,6 +251,8 @@ if __name__ == "__main__":
     print("\nReading config file at {}... ".format(fullConfigPath), end = "")
     parseConfig(fullConfigPath, CONFIG)
 
+    dgt, hv = init()
+
     if CONFIG["ENABLE_KEYBOARD"]:
         print("\nEnabling keyboard controls... ", end = "")
         controls = keyboard.Listener(on_press = keypress)
@@ -257,7 +260,8 @@ if __name__ == "__main__":
         print("Done!")
         print("Press q to quit program")
 
-    init()
+    start(dgt, hv)
+    cleanup(dgt, hv)
 else:
     print("Please don't run me as a module...")
     exit()
