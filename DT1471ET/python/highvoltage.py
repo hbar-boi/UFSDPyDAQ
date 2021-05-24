@@ -8,9 +8,11 @@ class HighVoltage():
     def __init__(self, board, resource = None):
         self.board = board
         self.connected = False
-        self.rm = pv.ResourceManager("@py")
+        self.rm = pv.ResourceManager()
         if resource == None:
             resource = self.promptResource()
+        else:
+            resource = self.rm.list_resources()[resource]
 
         try:
             self.handle = self.rm.open_resource(resource)
@@ -27,7 +29,7 @@ class HighVoltage():
             else:
                 break
 
-        self.model = self.getQuery("DBNAME")
+        self.model = self.getQuery("BDNAME")
 
     def setQuery(self, param, channel, value = None):
         if value == None:
@@ -47,8 +49,8 @@ class HighVoltage():
                 channel, param)
 
         out = self.handle.query(cmd)
-        check(out)
-        return out.split(",")[2].split(":")[1]
+        if check(out):
+            return out.split(",")[2].split(":")[1].rstrip()
 
     def enableChannel(self, channel):
         # Implement OFF check using status bits
@@ -109,6 +111,9 @@ class HighVoltage():
 def check(msg):
     if "ERR" in msg:
         print("\nPower supply: an error occurred during the last operation.")
+        return False
+    else:
+        return True
 
 def __init__():
     pass

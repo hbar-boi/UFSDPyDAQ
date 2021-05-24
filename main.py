@@ -1,6 +1,7 @@
 from modules import highvoltage, digitizer
 
 import configparser, sys, os, datetime, time
+import numpy as np
 from pynput import keyboard
 
 CONFIG_PATH = "config.ini"
@@ -11,6 +12,8 @@ HIGHVOLTAGE_MODELS = ["DT1471ET"]
 CONFIG = {}
 
 def init():
+    hv = connectHighVoltage()
+
     dgt = connectDigitizer()
     programDigitizer(dgt)
     dgtStatus = dgt.status()
@@ -23,8 +26,6 @@ def init():
     dgt.allocateEvent()
     dgt.mallocBuffer()
 
-    hv = connectHighVoltage()
-
     start(dgt, hv)
 
     cleanup(dgt, hv)
@@ -33,6 +34,7 @@ PROGRESS_TICK = 4
 
 def start(dgt, hv):
     global abort
+    abort = False
     global events
 
     dir = "{} - {}".format(CONFIG["TRIGGER_BIAS"], now())
@@ -43,8 +45,9 @@ def start(dgt, hv):
     hv.enableChannel(CONFIG["TRIGGER_CHANNEL"])
     hv.setVoltage(CONFIG["TRIGGER_CHANNEL"], CONFIG["TRIGGER_BIAS"], True)
     print("Ready!", end = "\n\n")
-    input("Press enter to start acquisition...", end = "\n\n")
+    input("Press enter to start acquisition...")
 
+    print("\n")
     max = CONFIG["MAX_EVENTS"]
     for bias in CONFIG["SENSOR_BIAS"]:
         print("Now acquiring {} events with sensor bias at {} V".format(
@@ -60,6 +63,7 @@ def start(dgt, hv):
         file = "{} - {}.txt".format(bias, now())
         path = os.path.join(dir, file)
         with open(path, "ab") as out:
+            dgt.startAcquisition()
             while events <= max:
                 events += acquire(dgt, out)
                 if progress < events:
@@ -71,13 +75,13 @@ def start(dgt, hv):
                         end = "\n\n")
                     cleanup()
                     exit()
+            dgt.stopAcquisition()
 
         os.rename(path, "{} to {}.txt".format(path[:-4], now()))
 
     os.rename(dir, "{} to {}".format(dir, now()))
 
 def acquire(dgt, file):
-    global events
     dgt.readData() # Update local buffer with data from the digitizer.
     num = dgt.getNumEvents() # How many events in this block?
 
@@ -143,7 +147,7 @@ def connectHighVoltage():
         exit()
 
     hvModel = hv.getModel()
-    if hvModel not in HIGHVOLTAGE_MODELS:
+    if not hvModel in HIGHVOLTAGE_MODELS:
         print("Fail!")
         print("This model is not supported, exiting.")
         exit()
@@ -171,6 +175,7 @@ def programDigitizer(device):
     device.setSamplingFrequency(0) # Max frequency, 5 GHz
     device.setRecordLength(1024) # Max value for 742
     device.setMaxNumEventsBLT(1023) # Packet size for file transfer
+    device.setAcquisitionMode(0) # Software controlled
     device.setExtTriggerInputMode(0) # Disable TRG IN trigger
 
     device.setFastTriggerMode(1) # Enable TR0 trigger
@@ -179,6 +184,10 @@ def programDigitizer(device):
     # Enable or disable groups
     device.setGroupEnableMask(CONFIG["ENABLED_GROUPS"])
 
+    # Positive polarity signals for both groups, unused but doesn't hurt
+    device.setGroupTriggerPolarity(0, 0)
+    device.setGroupTriggerPolarity(1, 0)
+
     device.setFastTriggerDCOffset(CONFIG["TRIGGER_BASELINE"])
     device.setFastTriggerThreshold(CONFIG["TRIGGER_THRESHOLD"])
 
@@ -186,6 +195,7 @@ def programDigitizer(device):
     if CONFIG["USE_INTERNAL_CORRECTION"]:
         device.loadCorrectionData(0) # Correction tables for 5 GHz operation
         device.enableCorrection()
+
     device.setPostTriggerSize(50) # Extra time after trigger
     print("Done!")
 
@@ -215,7 +225,10 @@ def parseConfig(path, config):
         elif param in TERNARY_PARAM.keys():
             CONFIG[key] = TERNARY_PARAM[CONFIG[key]]
         else:
-            CONFIG[key] = int(CONFIG[key])
+            try:
+                CONFIG[key] = int(CONFIG[key])
+            except:
+                pass
 
 def keypress(key):
     global abort
