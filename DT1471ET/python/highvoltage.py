@@ -9,7 +9,7 @@ class HighVoltage():
     def __init__(self, board, resource = None):
         self.board = board
         self.connected = False
-        self.rm = pv.ResourceManager()
+        self.rm = pv.ResourceManager("@py")
         if resource == None:
             resource = self.promptResource()
         else:

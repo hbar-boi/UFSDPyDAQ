@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 from modules import highvoltage, digitizer
 
 import configparser, sys, os, datetime, time
@@ -133,6 +134,7 @@ def cleanup(dgt, hv):
     hv.disableChannel(CONFIG["TRIGGER_CHANNEL"])
     print("Done!")
     print("Closing connection to power supply... ", end = "")
+    hv.close()
     print("Done!", end = "\n\n")
 
     print("Exiting, goodbye...")
