@@ -1,8 +1,7 @@
 #!/usr/bin/python3
-from modules import highvoltage, digitizer
+from modules import highvoltage, digitizer, tree
 
 import configparser, sys, os, datetime, time
-import numpy as np
 from pynput import keyboard
 
 CONFIG_PATH = "config.ini"
@@ -59,27 +58,26 @@ def start(dgt, hv):
 
         progress = 0
         events = 0
-        file = "{} - {}.txt".format(bias, now())
-        path = os.path.join(dir, file)
+        file = tree.TreeFile(bias, CONFIG["ENABLED_GROUPS"])
 
-        with open(path, "ab") as out:
-            dgt.startAcquisition()
-            while events <= max:
-                events += acquire(dgt, out)
-                if progress < events:
-                    print("Progress: {}/{} events...".format(events, max))
-                    progress += int(max / PROGRESS_TICK)
+        dgt.startAcquisition()
+        while events <= max:
+            events += acquire(dgt, file)
+            if progress < events:
+                print("Progress: {}/{} events...".format(events, max))
+                progress += int(max / PROGRESS_TICK)
 
-                if abort:
-                    print("Abort signal received, starting cleanup...",
-                        end = "\n\n")
-                    dgt.stopAcquisition()
-                    cleanup(dgt, hv)
-                    exit()
+            if abort:
+                print("Abort signal received, starting cleanup...",
+                    end = "\n\n")
+                dgt.stopAcquisition()
+                file.close()
+                cleanup(dgt, hv)
+                exit()
 
-            dgt.stopAcquisition()
+        dgt.stopAcquisition()
 
-        os.rename(path, "{} to {}.txt".format(path[:-4], now()))
+        file.close()
 
     os.rename(dir, "{} to {}".format(dir, now()))
 
@@ -89,38 +87,32 @@ def acquire(dgt, file):
 
     for i in range(num):
         data, info = dgt.getEvent(i, True) # Get event data and info
-        rows = 0
-        columns = 18
-        # This loop is used to select the maximum size, but is half useless,
-        # as all channels should have 1024 samples, as programmed.
-        for j in range(columns):
+
+        start = file.getStart()
+        size = file.getSize()
+        for j in range(start, size):
             group = int(j / 9)
+            if data.GrPresent[group] != 1:
+                continue # If this group was disabled then skip it
+
             channel = j - (9 * group)
-            rows = max(rows, data.DataGroup[group].ChSize[channel])
 
-        # Init zeros matrix for event data.
-        mat = np.zeros((rows, columns), dtype = "float")
-        for j in range(rows):
-            for k in range(columns):
-                # Group is either 0 or 1
-                group = int(k / 9)
-                if data.GrPresent[group] != 1:
-                    continue # If this group was disabled then skip it
+            block = data.DataGroup[group]
+            num = block.ChSize[channel]
 
-                # Channel goes from 0 to 7 for each group
-                channel = k - (9 * group)
-                # Update matrix with data.
-                mat[j][k] = data.DataGroup[group].DataChannel[channel][j]
+            order = group - (size / 9)
+            if channel == 8:
+                file.setTrigger(order, block.DataChannel[channel], num)
+            else:
+                file.setChannel(order, block.DataChannel[channel], num)
 
-        # Just a bit of stats for our event
-        head = "Event number: {} - Timestamp: {}".format(events + i,
-            info.TriggerTimeTag)
+        file.setTime(1024, 5E9)
 
-        np.savetxt(file, mat, fmt = "%.0f", delimiter = ",", header = head)
+        file.fill()
 
     return num
 
-def cleanup(dgt, hv):
+def cleanup(dgt, hv, file = None):
     print("\nDigitizer cleanup... ", end = "")
     dgt.stopAcquisition()
     dgt.freeEvent()
@@ -136,7 +128,6 @@ def cleanup(dgt, hv):
     print("Closing connection to power supply... ", end = "")
     hv.close()
     print("Done!", end = "\n\n")
-
     print("Exiting, goodbye...")
 
 # ========================= HIGH VOLTAGE STUFF ================================
