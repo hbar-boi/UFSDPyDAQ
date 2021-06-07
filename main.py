@@ -1,8 +1,6 @@
-#!/usr/bin/python3
-from modules import highvoltage, digitizer
+from modules import highvoltage, digitizer, tree
 
 import configparser, sys, os, datetime, time
-import numpy as np
 from pynput import keyboard
 
 CONFIG_PATH = "config.ini"
@@ -59,68 +57,61 @@ def start(dgt, hv):
 
         progress = 0
         events = 0
-        file = "{} - {}.txt".format(bias, now())
-        path = os.path.join(dir, file)
+        file = tree.TreeFile(str(bias))
 
-        with open(path, "ab") as out:
-            dgt.startAcquisition()
-            while events <= max:
-                events += acquire(dgt, out)
-                if progress < events:
-                    print("Progress: {}/{} events...".format(events, max))
-                    progress += int(max / PROGRESS_TICK)
+        dgt.startAcquisition()
+        while events <= max:
+            events += acquire(dgt, file)
+            if progress < events:
+                print("Progress: {}/{} events...".format(events, max))
+                progress += int(max / PROGRESS_TICK)
 
-                if abort:
-                    print("Abort signal received, starting cleanup...",
-                        end = "\n\n")
-                    dgt.stopAcquisition()
-                    cleanup(dgt, hv)
-                    exit()
+            if abort:
+                print("Abort signal received, starting cleanup...",
+                    end = "\n\n")
+                dgt.stopAcquisition()
+                file.close()
+                cleanup(dgt, hv)
+                exit()
 
-            dgt.stopAcquisition()
+        dgt.stopAcquisition()
 
-        os.rename(path, "{} to {}.txt".format(path[:-4], now()))
+        file.close()
 
     os.rename(dir, "{} to {}".format(dir, now()))
 
-def acquire(dgt, file):
-    dgt.readData() # Update local buffer with data from the digitizer.
-    num = dgt.getNumEvents() # How many events in this block?
+SAMPLING_FREQUENCIES = [5E3, 2.5E3, 1E3, 750] #MHz
 
+def acquire(dgt, file):
+    dgt.readData() # Update local buffer with data from the digitizer
+
+    num = dgt.getNumEvents() # How many events in this block?
     for i in range(num):
         data, info = dgt.getEvent(i, True) # Get event data and info
-        rows = 0
-        columns = 18
-        # This loop is used to select the maximum size, but is half useless,
-        # as all channels should have 1024 samples, as programmed.
-        for j in range(columns):
+
+        for j in range(18):
             group = int(j / 9)
+            if data.GrPresent[group] != 1:
+                continue # If this group was disabled then skip it
+
             channel = j - (9 * group)
-            rows = max(rows, data.DataGroup[group].ChSize[channel])
 
-        # Init zeros matrix for event data.
-        mat = np.zeros((rows, columns), dtype = "float")
-        for j in range(rows):
-            for k in range(columns):
-                # Group is either 0 or 1
-                group = int(k / 9)
-                if data.GrPresent[group] != 1:
-                    continue # If this group was disabled then skip it
+            block = data.DataGroup[group]
+            size = block.ChSize[channel]
 
-                # Channel goes from 0 to 7 for each group
-                channel = k - (9 * group)
-                # Update matrix with data.
-                mat[j][k] = data.DataGroup[group].DataChannel[channel][j]
+            if channel == 8:
+                file.setTrigger(group, block.DataChannel[channel], size)
+            else:
+                file.setChannel(j - group, block.DataChannel[channel], size)
 
-        # Just a bit of stats for our event
-        head = "Event number: {} - Timestamp: {}".format(events + i,
-            info.TriggerTimeTag)
+        file.setFrequency(SAMPLING_FREQUENCIES[CONFIG["FREQUENCY"]])
+        file.setEventLength(CONFIG["EVENT_LENGTH"])
 
-        np.savetxt(file, mat, fmt = "%.0f", delimiter = ",", header = head)
+        file.fill()
 
     return num
 
-def cleanup(dgt, hv):
+def cleanup(dgt, hv, file = None):
     print("\nDigitizer cleanup... ", end = "")
     dgt.stopAcquisition()
     dgt.freeEvent()
@@ -136,7 +127,6 @@ def cleanup(dgt, hv):
     print("Closing connection to power supply... ", end = "")
     hv.close()
     print("Done!", end = "\n\n")
-
     print("Exiting, goodbye...")
 
 # ========================= HIGH VOLTAGE STUFF ================================
@@ -175,17 +165,19 @@ def connectDigitizer():
 def programDigitizer(device):
     print("Programming digitizer... ", end = "")
     # Data acquisition
-    device.setSamplingFrequency(0) # Max frequency, 5 GHz
-    device.setRecordLength(1024) # Max value for 742
+    device.setSamplingFrequency(CONFIG["FREQUENCY"]) # Max frequency, 5 GHz
+    device.setRecordLength(CONFIG["EVENT_LENGTH"]) # Max value for 742
     device.setMaxNumEventsBLT(1023) # Packet size for file transfer
     device.setAcquisitionMode(0) # Software controlled
     device.setExtTriggerInputMode(0) # Disable TRG IN trigger
+
+    #device.writeRegister(0x8004, 1<<3) # Enable test pattern
 
     device.setFastTriggerMode(1) # Enable TR0 trigger
     device.setFastTriggerDigitizing(1) # Digitize TR0
 
     # Enable or disable groups
-    device.setGroupEnableMask(CONFIG["ENABLED_GROUPS"])
+    device.setGroupEnableMask(0b11)
 
     # Positive polarity signals for both groups, unused but doesn't hurt
     device.setGroupTriggerPolarity(0, 0)
@@ -205,7 +197,6 @@ def programDigitizer(device):
 # ============================= UI SERVICES ===================================
 
 BOOLEAN_PARAM = {"YES": True, "NO": False}
-TERNARY_PARAM = {"FIRST": 0b01, "SECOND": 0b10, "BOTH": 0b11}
 
 def parseConfig(path, config):
     parser = configparser.ConfigParser()
@@ -225,8 +216,6 @@ def parseConfig(path, config):
             CONFIG[key] = [int(i) for i in CONFIG[key][1:-1].split(",")]
         elif param in BOOLEAN_PARAM.keys():
             CONFIG[key] = BOOLEAN_PARAM[CONFIG[key]]
-        elif param in TERNARY_PARAM.keys():
-            CONFIG[key] = TERNARY_PARAM[CONFIG[key]]
         else:
             try:
                 CONFIG[key] = int(CONFIG[key])

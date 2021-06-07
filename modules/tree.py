@@ -1,7 +1,6 @@
 import ROOT as rt
-import os
 from array import array
-from multiprocessing import Pool
+import os
 
 class TreeFile():
 
@@ -70,48 +69,3 @@ class TreeFile():
 
     def getStart(self):
         return self.start
-
-
-def init():
-    global orig
-    global dest
-    orig = "../../wafer2-100-200-txt/wafer2-100-200-shifted"
-    dest = "../../wafer2-100-200-root/wafer2-100-200-shifted"
-    os.makedirs(dest, exist_ok = True)
-
-    with Pool(8) as p:
-        p.map(convert, os.listdir(orig))
-
-def convert(name):
-    global orig
-    global dest
-    events = []
-    with open(os.path.join(orig, name), "r") as file:
-        event = None
-        for i, line in enumerate(file):
-            if line[0] == "#":
-                if i > 0:
-                    events.append(event)
-                event = [[] for k in range(18)]
-            else:
-                cols = line.strip("\n").split(",")
-                for j, col in enumerate(cols):
-                    event[j].append(int(col))
-        events.append(event)
-
-    root = TreeFile(dest, name[:-4])
-    for event in events:
-        root.setFrequency(5E3)
-        root.setEventLength(1024)
-        for i, channel in enumerate(event):
-            group = int(i / 9)
-            if i == 8 or i == 17:
-                root.setTrigger(group, channel, 1024)
-            else:
-                root.setChannel(i - group, channel, 1024)
-        root.fill()
-
-    root.close()
-
-if __name__ == "__main__":
-    init()
