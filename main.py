@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 from modules import highvoltage, digitizer, tree
 
 import configparser, sys, os, datetime, time
@@ -58,7 +57,7 @@ def start(dgt, hv):
 
         progress = 0
         events = 0
-        file = tree.TreeFile(bias, CONFIG["ENABLED_GROUPS"])
+        file = tree.TreeFile(str(bias))
 
         dgt.startAcquisition()
         while events <= max:
@@ -81,16 +80,16 @@ def start(dgt, hv):
 
     os.rename(dir, "{} to {}".format(dir, now()))
 
-def acquire(dgt, file):
-    dgt.readData() # Update local buffer with data from the digitizer.
-    num = dgt.getNumEvents() # How many events in this block?
+SAMPLING_FREQUENCIES = [5E3, 2.5E3, 1E3, 750] #MHz
 
+def acquire(dgt, file):
+    dgt.readData() # Update local buffer with data from the digitizer
+
+    num = dgt.getNumEvents() # How many events in this block?
     for i in range(num):
         data, info = dgt.getEvent(i, True) # Get event data and info
 
-        start = file.getStart()
-        size = file.getSize()
-        for j in range(start, size):
+        for j in range(18):
             group = int(j / 9)
             if data.GrPresent[group] != 1:
                 continue # If this group was disabled then skip it
@@ -98,15 +97,15 @@ def acquire(dgt, file):
             channel = j - (9 * group)
 
             block = data.DataGroup[group]
-            num = block.ChSize[channel]
+            size = block.ChSize[channel]
 
-            order = group - (size / 9)
             if channel == 8:
-                file.setTrigger(order, block.DataChannel[channel], num)
+                file.setTrigger(group, block.DataChannel[channel], size)
             else:
-                file.setChannel(order, block.DataChannel[channel], num)
+                file.setChannel(j - group, block.DataChannel[channel], size)
 
-        file.setTime(1024, 5E9)
+        file.setFrequency(SAMPLING_FREQUENCIES[CONFIG["FREQUENCY"]])
+        file.setEventLength(CONFIG["EVENT_LENGTH"])
 
         file.fill()
 
@@ -166,17 +165,19 @@ def connectDigitizer():
 def programDigitizer(device):
     print("Programming digitizer... ", end = "")
     # Data acquisition
-    device.setSamplingFrequency(0) # Max frequency, 5 GHz
-    device.setRecordLength(1024) # Max value for 742
+    device.setSamplingFrequency(CONFIG["FREQUENCY"]) # Max frequency, 5 GHz
+    device.setRecordLength(CONFIG["EVENT_LENGTH"]) # Max value for 742
     device.setMaxNumEventsBLT(1023) # Packet size for file transfer
     device.setAcquisitionMode(0) # Software controlled
     device.setExtTriggerInputMode(0) # Disable TRG IN trigger
+
+    #device.writeRegister(0x8004, 1<<3) # Enable test pattern
 
     device.setFastTriggerMode(1) # Enable TR0 trigger
     device.setFastTriggerDigitizing(1) # Digitize TR0
 
     # Enable or disable groups
-    device.setGroupEnableMask(CONFIG["ENABLED_GROUPS"])
+    device.setGroupEnableMask(0b11)
 
     # Positive polarity signals for both groups, unused but doesn't hurt
     device.setGroupTriggerPolarity(0, 0)
@@ -196,7 +197,6 @@ def programDigitizer(device):
 # ============================= UI SERVICES ===================================
 
 BOOLEAN_PARAM = {"YES": True, "NO": False}
-TERNARY_PARAM = {"FIRST": 0b01, "SECOND": 0b10, "BOTH": 0b11}
 
 def parseConfig(path, config):
     parser = configparser.ConfigParser()
@@ -216,8 +216,6 @@ def parseConfig(path, config):
             CONFIG[key] = [int(i) for i in CONFIG[key][1:-1].split(",")]
         elif param in BOOLEAN_PARAM.keys():
             CONFIG[key] = BOOLEAN_PARAM[CONFIG[key]]
-        elif param in TERNARY_PARAM.keys():
-            CONFIG[key] = TERNARY_PARAM[CONFIG[key]]
         else:
             try:
                 CONFIG[key] = int(CONFIG[key])

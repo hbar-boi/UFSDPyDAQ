@@ -37,6 +37,7 @@ class Analyzer():
 
             file = rt.TFile.Open(path, "READ")
             tree = file.Get("wfm")
+            tree.Print()
 
             params = {"channels": ["chn{}".format(i) for i in range(16)],
                 "triggers": ["trg{}".format(i) for i in range(2)]}
@@ -68,7 +69,7 @@ class Analyzer():
 
             return current, minimum
 
-        earliests, minimums = [], []
+        """earliests, minimums = [], []
         for trigger in triggers:
             index, begin = getEarliest(trigger)
             earliests.append(index)
@@ -81,7 +82,7 @@ class Analyzer():
         self.channels[0:8] = np.array([self.applyTimeCorrection(channel,
             triggers[0]) for channel in self.channels[0:8]])
         self.channels[8:16] = np.array([self.applyTimeCorrection(channel,
-            triggers[1]) for channel in self.channels[8:16]])
+            triggers[1]) for channel in self.channels[8:16]])"""
 
         self.means = np.array([self.coupleAC(
             self.average(channel)) for channel in self.channels])
@@ -94,7 +95,7 @@ class Analyzer():
     def parse(self, tree, params):
         vectors = {}
         for label in params:
-            vector = rt.std.vector("double")()
+            vector = rt.std.vector("int")()
             tree.SetBranchAddress(label, vector)
             vectors[label] = vector
 
@@ -149,23 +150,21 @@ class Analyzer():
         return np.array([np.trapz(samples) for samples in data])
 
 if __name__ == "__main__":
-    file = "../../../wafer2-100-200-root/wafer2-100-200/400V_x320y530.root"
-    a = Analyzer(file)
+    file = "../70.root"
+    a = Analyzer(file, False)
 
     fig, plots = plt.subplots(12, sharex = True)
     x = np.arange(0, TIME_STEP * 1024, TIME_STEP)
     titles = ["CHN{}".format(i) for i in range(9)]
 
-    for t, event in enumerate(a.means[0:9]):
+    for t, event in enumerate(a.channels[0:9]):
         """peaks = sp.find_peaks([-x for x in channel], prominence = 12)
             for p in peaks[0]:
                 plots[t].axvline(x = x[p])"""
         plots[t].set_ylabel(titles[t], fontsize = 10)
-        plots[t].set_ylim((-220, 100))
-        plots[t].plot(x, event, "-", linewidth = 1)
+        plots[t].plot(x, event[0], "-", linewidth = 1)
 
     plots[9].set_ylabel("TRG", fontsize = 10)
-    plots[9].plot(x, a.trigger, "-", linewidth = 1)
 
     plots[10 + 1].set_xlabel("Time [ns]", fontsize = 10)
 
