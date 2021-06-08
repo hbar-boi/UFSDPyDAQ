@@ -22,6 +22,7 @@ class Analyzer():
     def __init__(self, path, cache = True):
         start = time.time()
 
+
         make = False
         if cache:
             data = None
@@ -69,15 +70,14 @@ class Analyzer():
         print("Applying corrections to data...")
         start = time.time()
 
-        exit()
-        #self.process()
+        self.process()
 
         end = time.time()
         print("Data ready, took another {} seconds".format(end - start))
 
 
     def process(self):
-        self.channels = np.array(
+        """self.channels = np.array(
             [self.removeShotPeaks(channel) for channel in self.channels])
 
         def getEarliest(data):
@@ -110,7 +110,7 @@ class Analyzer():
         self.means = np.array([self.coupleAC(
             self.average(channel)) for channel in self.channels])
 
-        print(self.integrate(self.means[0:10]))
+        print(self.integrate(self.means[0:10]))"""
 
     def parse(path, param, index):
         file = rt.TFile.Open(path, "READ")
@@ -171,20 +171,16 @@ class Analyzer():
 
 if __name__ == "__main__":
 
-    file = "/home/work/Github/data/testdiag.root"
-    res = Analyzer(file, False)
+    file = "/home/work/Github/data/prova1.root"
+    res = Analyzer(file)
 
     fig, plots = plt.subplots(12, sharex = True)
     x = np.arange(0, TIME_STEP * 1024, TIME_STEP)
     titles = ["CHN{}".format(i) for i in range(9)]
 
-    """for t, channel in enumerate(res.channels[0:9]):
-        for event in (channel):
+    plots[9].plot(x, res.channels[9][0], "-", linewidth = 1)
 
-            plots[t].set_ylabel(titles[t], fontsize = 10)
-            plots[t].plot(x, event, "-", linewidth = 1)"""
-
-    for e, event in enumerate(res.means[0:9]):
+    """for e, event in enumerate(res.means[0:9]):
         peaks = sp.find_peaks(-event, prominence = 6)[0]
         for p in peaks:
             plots[e].axvline(x = x[p])
@@ -206,6 +202,6 @@ if __name__ == "__main__":
 
     plots[11].plot(x, res.means[10], linewidth = 1)
     plots[11].set_ylabel("VREF", fontsize = 10)
-    plots[11].set_xlabel("Time [ns]", fontsize = 10)
+    plots[11].set_xlabel("Time [ns]", fontsize = 10)"""
 
     plt.show()

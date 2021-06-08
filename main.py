@@ -68,6 +68,7 @@ def start(dgt, hv):
                     if input("Press enter to continue, type 's' to skip...") == "s":
                         continue
                     acquireAtPoint(dgt, hv, x, y, meta, file)
+                    file.Write()
         elif CONFIG["MODE"] == 2:
             xStart = CONFIG["X_START"]
             xEnd = CONFIG["X_END"] + CONFIG["X_STEP"]
@@ -96,7 +97,6 @@ def acquireAtPoint(dgt, hv, x, y, meta, file):
 
     dgt.startAcquisition()
     while events <= meta["max"]:
-        dgt.trigger()
         events += transfer(dgt, file, meta["max"] - progress, meta)
         if progress < events:
             print("Progress: {}/{} events...".format(events, meta["max"]))
@@ -122,7 +122,7 @@ def transfer(dgt, file, left, meta):
     num = dgt.getNumEvents() # How many events in this block?
     for i in range(num):
         if i > left:
-            break
+            return i
 
         data, info = dgt.getEvent(i, True) # Get event data and info
 
