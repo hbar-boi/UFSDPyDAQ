@@ -171,7 +171,7 @@ class Analyzer():
 
 if __name__ == "__main__":
 
-    file = "/home/work/Github/data/testdiag.root"
+    file = "/home/work/Github/data/griglia20um.root"
     res = Analyzer(file, False)
 
     fig, plots = plt.subplots(12, sharex = True)

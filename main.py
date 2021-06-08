@@ -8,247 +8,258 @@ CONFIG_PATH = "config.ini"
 DIGITIZER_MODELS = ["DT5742"]
 HIGHVOLTAGE_MODELS = ["DT1471ET"]
 
-CONFIG = {}
-
-def init():
-    # PyUSB acts weird if we try to connect the digitizer first...
-    hv = connectHighVoltage()
-
-    dgt = connectDigitizer()
-    programDigitizer(dgt)
-    dgtStatus = dgt.status()
-    print("Digitizer status is {}, ".format(hex(dgtStatus)), end = "")
-    if dgtStatus == 0x180:
-        print("good!")
-    else:
-        print("something's wrong. Exiting.")
-        exit()
-    dgt.allocateEvent()
-    dgt.mallocBuffer()
-
-    return dgt, hv
-
 PROGRESS_TICK = 4
 
-def start(dgt, hv):
-    global abort
-    abort = False
+class UFSDPyDAQ:
 
-    dir = os.path.join(CONFIG["DATA_PATH"])
-    if not os.path.exists(dir):
-        os.mkdir(dir)
-    file = tree.TreeFile(dir, CONFIG["FILENAME"])
+    def __init__(self, config):
+        self.sensorChannel = config["SENSOR_CHANNEL"]
+        self.triggerChannel = config["TRIGGER_CHANNEL"]
 
-    hv.enableChannel(CONFIG["SENSOR_CHANNEL"])
-    hv.enableChannel(CONFIG["TRIGGER_CHANNEL"])
-    print("\nWaiting for power supply... ", end = "")
-    hv.setVoltage(CONFIG["TRIGGER_CHANNEL"], CONFIG["TRIGGER_BIAS"], True)
-    print("Ready!")
-    input("Press enter to start acquisition...")
+        self.triggerBias = config["TRIGGER_BIAS"]
+        self.outputPath = config["DATA_PATH"]
+        self.outputFile = config["FILENAME"]
 
-    meta = {}
-    meta["max"] = CONFIG["MAX_EVENTS"]
+        self.sensorBiases = config["SENSOR_BIAS"]
 
-    for bias in CONFIG["SENSOR_BIAS"]:
-        meta["bias"] = bias
-        print("\nNow acquiring with sensor bias at {} V".format(meta["bias"]))
-        print("Waiting for power supply... ", end = "")
-        hv.setVoltage(CONFIG["SENSOR_CHANNEL"], meta["bias"], True)
-        print("Ready!", end = "\n\n")
+        self.maxEvents = config["MAX_EVENTS"]
+        self.eventSize = config["EVENT_LENGTH"]
+        self.mode = config["MODE"]
+        self.frequency = config["FREQUENCY"]
+        self.hvNumber = config["HIGHVOLTAGE_ID"]
+        self.dgtNumber = config["DIGITIZER_ID"]
+        self.triggerBaseline = config["TRIGGER_BASELINE"]
+        self.triggerThresh = config["TRIGGER_THRESHOLD"]
+        self.correct = config["USE_INTERNAL_CORRECTION"]
 
-        if CONFIG["MODE"] == 0:
-            acquireAtPoint(dgt, hv, 0, 0, meta, file)
-        elif CONFIG["MODE"] == 1:
-            xRange = range(CONFIG["X_START"], CONFIG["X_END"] + CONFIG["X_STEP"], CONFIG["X_STEP"])
-            for x in xRange:
-                yRange = range(CONFIG["Y_START"], CONFIG["Y_END"] + CONFIG["Y_STEP"], CONFIG["Y_STEP"])
-                for y in yRange:
-                    print("\nNow acquiring {} events with sensor bias at {} V. Position is (x = {}, y = {})".format(
-                        meta["max"], meta["bias"], x, y))
-                    if input("Press enter to continue, type 's' to skip...") == "s":
-                        continue
-                    acquireAtPoint(dgt, hv, x, y, meta, file)
-        elif CONFIG["MODE"] == 2:
-            xStart = CONFIG["X_START"]
-            xEnd = CONFIG["X_END"] + CONFIG["X_STEP"]
-            xStep = CONFIG["X_STEP"]
+        # PyUSB acts weird if we try to connect the digitizer first...
+        self.hv = connectHighVoltage()
 
-            yStart = CONFIG["Y_START"]
-
-            xRange = range(xStart, xEnd, xStep)
-            aspectRatio = (CONFIG["Y_END"] - yStart) / (CONFIG["X_END"] - xStart)
-
-            for x in xRange:
-                print("\nNow acquiring {} events with sensor bias at {} V. Position is (x = {}, y = {})".format(
-                    meta["max"], meta["bias"], x, yStart + ((x - xStart) * aspectRatio)))
-                if input("Press enter to continue, type 's' to skip...") == "s":
-                    continue
-                acquireAtPoint(dgt, hv, x, yStart  + ((x - xStart) * aspectRatio), meta, file)
-
-    file.close()
-
-def acquireAtPoint(dgt, hv, x, y, meta, file):
-    progress = 0
-    events = 0
-
-    meta["x"] = x
-    meta["y"] = y
-
-    dgt.startAcquisition()
-    while events <= meta["max"]:
-        dgt.trigger()
-        events += transfer(dgt, file, meta["max"] - progress, meta)
-        if progress < events:
-            print("Progress: {}/{} events...".format(events, meta["max"]))
-            progress += int(meta["max"] / PROGRESS_TICK)
-
-        if abort:
-            print("Abort signal received, starting cleanup...",
-                end = "\n\n")
-
-            dgt.stopAcquisition()
-            file.close()
-
-            cleanup(dgt, hv)
+        self.dgt = connectDigitizer()
+        self.programDigitizer()
+        status = self.dgt.status()
+        print("Digitizer status is {}, ".format(hex(status)), end = "")
+        if dgtStatus == 0x180:
+            print("good!")
+        else:
+            print("something's wrong. Exiting.")
             exit()
+        self.dgt.allocateEvent()
+        self.dgt.mallocBuffer()
 
-    dgt.stopAcquisition()
+    def prepare(self):
+        self.abort = False
 
-SAMPLING_FREQUENCIES = [5E3, 2.5E3, 1E3, 750] #MHz
+        dir = os.path.join(self.outputPath)
+        if not os.path.exists(dir):
+            os.mkdir(dir)
+        self.file = tree.TreeFile(dir, self.outputFile)
 
-def transfer(dgt, file, left, meta):
-    dgt.readData() # Update local buffer with data from the digitizer
+        SAMPLING_FREQUENCIES = [5E3, 2.5E3, 1E3, 750] # MHz
+        self.file.setFrequency(SAMPLING_FREQUENCIES[self.frequency])
+        self.file.setEventLength(self.eventSize)
 
-    num = dgt.getNumEvents() # How many events in this block?
-    for i in range(num):
-        if i > left:
-            break
+        self.hv.enableChannel(cself.sensorChannel)
+        self.hv.enableChannel(self.triggerChannel)
+        self.hvSetBlocking(self.triggerChannel, self.triggerBias)
 
-        data, info = dgt.getEvent(i, True) # Get event data and info
+        if input("Start acquisition? [y/n] ") == "n":
+            return False
+        else:
+            return True
 
-        for j in range(18):
-            group = int(j / 9)
-            if data.GrPresent[group] != 1:
-                continue # If this group was disabled then skip it
+    def acquire(self):
+        xStart = config["X_START"]
+        xStep = config["X_STEP"]
+        xStop = config["X_END"] + xStep
 
-            channel = j - (9 * group)
+        yStart = config["Y_START"]
+        yStep = config["Y_STEP"]
+        yStop = config["Y_END"] + yStep
 
-            block = data.DataGroup[group]
-            size = block.ChSize[channel]
+        for bias in self.sensorBiases:
+            self.hvSetBlocking(self.sensorChannel, bias)
+            self.file.setBias(bias)
+            print("\nNow acquiring with sensor bias at {} V".format(bias))
 
-            if channel == 8:
-                file.setTrigger(group, block.DataChannel[channel], size)
-            else:
-                file.setChannel(j - group, block.DataChannel[channel], size)
+            # Single point
+            if self.mode == 0:
+                self.acquirePoint(0, 0)
+            # Grid acquisition
+            elif self.mode == 1:
+                for x in range(xStart, xStop, xStep):
+                    for y in range(yStart, yStop, yStep):
+                        self.acquirePoint(x, y)
+            # Diagonal acquisition
+            elif self.mode == 2:
+                xRatioEnd = config["X_END"]
+                yRatioEnd = config["Y_END"]
+                aspectRatio = (yRatioEnd - yStart) / (xRatioEnd - xStart)
 
-        file.setFrequency(SAMPLING_FREQUENCIES[CONFIG["FREQUENCY"]])
-        file.setEventLength(CONFIG["EVENT_LENGTH"])
-        file.setBias(meta["bias"])
-        file.setPosition(meta["x"], meta["y"])
+                for x in range(xStart, xStop, xStep):
+                    y = yStart + ((x - xStart) * aspectRatio)
+                    self.acquirePoint(x, y)
 
-        file.fill()
+    def acquirePoint(self, x, y):
+        print("\nNow acquiring {} events at (x = {}, y = {})".format(
+            self.maxEvents, x, y))
+        prompt = input("Press enter to continue, type 's' to skip or 'q' to quit... ")
+        if prompt == "s":
+            return
+        elif prompt == "q":
+            self.abort = True
 
-    return num
+        self.file.setPosition(x, y)
 
-def cleanup(dgt, hv, file = None):
-    print("\nDigitizer cleanup... ", end = "")
-    dgt.stopAcquisition()
-    dgt.freeEvent()
-    dgt.freeBuffer()
-    print("Done!")
-    print("Closing connection to digitizer... ", end = "")
-    dgt.close()
-    print("Done!", end = "\n\n")
-    print("Power supply cleanup... ", end = "")
-    hv.disableChannel(CONFIG["SENSOR_CHANNEL"])
-    hv.disableChannel(CONFIG["TRIGGER_CHANNEL"])
-    print("Done!")
-    print("Closing connection to power supply... ", end = "")
-    hv.close()
-    print("Done!", end = "\n\n")
-    print("Exiting, goodbye...")
+        events = 0
+        self.dgt.startAcquisition()
+        while True
+            if self.abort:
+                print("Abort signal received, starting cleanup...",
+                    end = "\n\n")
+
+                self.dgt.stopAcquisition()
+                self.file.close()
+                self.cleanup()
+                exit()
+
+            events += self.poll(events, bias)
+            if events >= self.maxEvents:
+                print("Acquired {}/{} events.".format(events, self.maxEvents))
+                break
+        self.dgt.stopAcquisition()
+
+    def poll(self, taken):
+        self.dgt.readData() # Update local buffer with data from the digitizer
+
+        size = self.dgt.getNumEvents() # How many events in this block?
+        remaining = min(size, self.maxEvents - taken)
+        for i in range(remaining):
+            data, info = self.dgt.getEvent(i, True) # Get event data and info
+
+            for j in range(18):
+                group = int(j / 9)
+                if data.GrPresent[group] != 1:
+                    continue # If this group was disabled then skip it
+
+                channel = j - (9 * group)
+                block = data.DataGroup[group]
+                size = block.ChSize[channel]
+
+                if channel == 8:
+                    self.file.setTrigger(group,
+                        block.DataChannel[channel], size)
+                else:
+                    self.file.setChannel(j - group,
+                        block.DataChannel[channel], size)
+
+            self.file.fill()
+        return remaining
+
+    def hvSetBlocking(self, channel, bias):
+        print("\nWaiting for power supply... ", end = "")
+        self.hv.setVoltage(channel, bias, True)
+        print("Ready!")
+
+    def cleanup(self):
+        self.file.close()
+        print("\nDigitizer cleanup... ", end = "")
+        self.dgt.stopAcquisition()
+        self.dgt.freeEvent()
+        self.dgt.freeBuffer()
+        print("Done!")
+        print("Closing connection to digitizer... ", end = "")
+        self.dgt.close()
+        print("Done!", end = "\n\n")
+        print("Power supply cleanup... ", end = "")
+        self.hv.disableChannel(self.sensorChannel)
+        self.hv.disableChannel(self.triggerChannel)
+        print("Done!")
+        print("Closing connection to power supply... ", end = "")
+        self.hv.close()
+        print("Done!", end = "\n\n")
+        print("Exiting, goodbye...")
 
 # ========================= HIGH VOLTAGE STUFF ================================
 
-def connectHighVoltage():
-    print("\nConnecting to power supply... ", end = "")
-    hv = highvoltage.HighVoltage(CONFIG["HIGHVOLTAGE_ID"])
-    if not hv.connected:
-        print("Fail!")
-        print("Couldn't connect to device, exiting.")
-        exit()
+    def connectHighVoltage(self):
+        print("\nConnecting to power supply... ", end = "")
+        self.hv = highvoltage.HighVoltage(self.hvNumber)
+        if not self.hv.connected:
+            print("Fail!")
+            print("Couldn't connect to device, exiting.")
+            exit()
 
-    hvModel = hv.getModel()
-    if not hvModel in HIGHVOLTAGE_MODELS:
-        print("Fail!")
-        print("This model is not supported, exiting.")
-        exit()
-    print("Done! Hello " + hvModel)
-    return hv
+        hvModel = self.hv.getModel()
+        if not hvModel in HIGHVOLTAGE_MODELS:
+            print("Fail!")
+            print("This model is not supported, exiting.")
+            exit()
+        print("Done! Hello " + hvModel)
 
 # ========================= DIGITIZER STUFF ===================================
 
-def connectDigitizer():
-    print("\nConnecting to digitizer... ", end = "")
-    dgt = digitizer.Digitizer(CONFIG["DIGITIZER_ID"])
-    dgt.reset()
-    dgtInfo = dgt.getInfo()
-    dgtModel = str(dgtInfo.ModelName, "utf-8")
-    if dgtModel not in DIGITIZER_MODELS:
-        print("Fail!")
-        print("This model is not supported, exiting.")
-        exit()
-    print("Done! Hello " + dgtModel)
-    return dgt
+    def connectDigitizer(self):
+        print("\nConnecting to digitizer... ", end = "")
+        self.dgt = digitizer.Digitizer(self.dgtNumber)
+        self.dgt.reset()
+        dgtInfo = self.dgt.getInfo()
+        dgtModel = str(dgtInfo.ModelName, "utf-8")
+        if dgtModel not in DIGITIZER_MODELS:
+            print("Fail!")
+            print("This model is not supported, exiting.")
+            exit()
+        print("Done! Hello " + dgtModel)
 
-def programDigitizer(device):
-    print("Programming digitizer... ", end = "")
-    # Data acquisition
-    device.setSamplingFrequency(CONFIG["FREQUENCY"]) # Max frequency, 5 GHz
-    device.setRecordLength(CONFIG["EVENT_LENGTH"]) # Max value for 742
-    device.setMaxNumEventsBLT(1023) # Packet size for file transfer
-    device.setAcquisitionMode(0) # Software controlled
-    device.setExtTriggerInputMode(0) # Disable TRG IN trigger
+    def programDigitizer(self):
+        print("Programming digitizer... ", end = "")
+        # Data acquisition
+        self.dgt.setSamplingFrequency(self.frequency) # Max frequency, 5 GHz
+        self.dgt.setRecordLength(self.eventSize) # Max value for 742
+        self.dgt.setMaxNumEventsBLT(1023) # Packet size for file transfer
+        self.dgt.setAcquisitionMode(0) # Software controlled
+        self.dgt.setExtTriggerInputMode(0) # Disable TRG IN trigger
 
-    #device.writeRegister(0x8004, 1<<3) # Enable test pattern
+        #device.writeRegister(0x8004, 1<<3) # Enable test pattern
 
-    device.setFastTriggerMode(1) # Enable TR0 trigger
-    device.setFastTriggerDigitizing(1) # Digitize TR0
+        self.dgt.setFastTriggerMode(1) # Enable TR0 trigger
+        self.dgt.setFastTriggerDigitizing(1) # Digitize TR0
 
-    # Enable or disable groups
-    device.setGroupEnableMask(0b11)
+        # Enable or disable groups
+        self.dgt.setGroupEnableMask(0b11)
 
-    # Positive polarity signals for both groups, unused but doesn't hurt
-    device.setGroupTriggerPolarity(0, 0)
-    device.setGroupTriggerPolarity(1, 0)
+        # Positive polarity signals for both groups, unused but doesn't hurt
+        self.dgt.setGroupTriggerPolarity(0, 0)
+        self.dgt.setGroupTriggerPolarity(1, 0)
 
-    device.setFastTriggerDCOffset(CONFIG["TRIGGER_BASELINE"])
-    device.setFastTriggerThreshold(CONFIG["TRIGGER_THRESHOLD"])
+        self.dgt.setFastTriggerDCOffset(self.triggerBaseline)
+        self.dgt.setFastTriggerThreshold(self.triggerThresh)
 
-    # Data processing
-    if CONFIG["USE_INTERNAL_CORRECTION"]:
-        device.loadCorrectionData(0) # Correction tables for 5 GHz operation
-        device.enableCorrection()
+        # Data processing
+        if correct:
+            self.dgt.loadCorrectionData(0) # Correction tables for 5 GHz operation
+            self.dgt.enableCorrection()
 
-    device.setPostTriggerSize(50) # Extra time after trigger
-    print("Done!")
+        self.dgt.setPostTriggerSize(50) # Extra time after trigger
+        print("Done!")
 
 # ============================= UI SERVICES ===================================
 
 BOOLEAN_PARAM = {"YES": True, "NO": False}
 MODE_PARAM = {"SINGLE": 0, "GRID": 1, "DIAG": 2}
 
-def parseConfig(path, config):
+def parseConfig(path):
     parser = configparser.ConfigParser()
     parser.optionxform = lambda option: option
     parser.read(path)
+
+    CONFIG = {}
 
     for part in parser:
         section = parser[part]
         CONFIG.update(section)
 
     print("Done!", end = "\n\n")
-
     # Print params and make them machine-usable
     for key, param in CONFIG.items():
         print("{}: {}".format(key, param))
@@ -264,37 +275,35 @@ def parseConfig(path, config):
             except:
                 pass
 
-def keypress(key):
-    global abort
-    try:
-        k = key.char
-    except:
-        k = key.name
-
-    sys.stdout.write("\b")
-    if k == "q":
-        abort = True
-
-def now():
-    return datetime.datetime.fromtimestamp(
-        time.time()).strftime('%Y-%m-%d %H:%M:%S')
+    return CONFIG
 
 if __name__ == "__main__":
     fullConfigPath = os.path.abspath(CONFIG_PATH)
     print("\nReading config file at {}... ".format(fullConfigPath), end = "")
-    parseConfig(fullConfigPath, CONFIG)
+    config = parseConfig(fullConfigPath)
 
-    dgt, hv = init()
+    daq = UFSDPyDAQ(config)
 
-    if CONFIG["ENABLE_KEYBOARD"]:
-        print("\nEnabling keyboard controls... ", end = "")
-        controls = keyboard.Listener(on_press = keypress)
-        controls.start()
-        print("Done!")
-        print("Press q to quit program")
+    def keypress(key):
+        global abort
+        try:
+            k = key.char
+        except:
+            k = key.name
 
-    start(dgt, hv)
-    cleanup(dgt, hv)
+        sys.stdout.write("\b")
+        if k == "q":
+            daq.abort = True
+
+    print("\nEnabling keyboard controls... ", end = "")
+    controls = keyboard.Listener(on_press = keypress)
+    controls.start()
+    print("Done!")
+
+    if daq.prepare():
+        daq.acquire()
+
+    daq.cleanup()
 else:
     print("Please don't run me as a module...")
     exit()

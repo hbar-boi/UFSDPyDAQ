@@ -40,12 +40,6 @@ class TreeFile():
         self.clear()
 
     def clear(self):
-        self.length[0] = 0.0
-        self.frequency[0] = 0.0
-        self.bias[0] = 0.0
-
-        self.pos.clear()
-
         for c in self.channels:
             c.clear()
 
@@ -75,6 +69,7 @@ class TreeFile():
         self.length[0] = float(length)
 
     def setPosition(self, x, y):
+        self.pos.clear()
         self.pos.push_back(float(x))
         self.pos.push_back(float(y))
 
