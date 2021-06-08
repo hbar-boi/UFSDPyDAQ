@@ -33,11 +33,11 @@ PROGRESS_TICK = 4
 def start(dgt, hv):
     global abort
     abort = False
-    global events
 
-    dir = "{} - {}".format(CONFIG["TRIGGER_BIAS"], now())
-    dir = os.path.join(CONFIG["DATA_PATH"], dir)
-    os.mkdir(dir)
+    dir = os.path.join(CONFIG["DATA_PATH"])
+    if not os.path.exists(dir):
+        os.mkdir(dir)
+    file = tree.TreeFile(dir, CONFIG["FILENAME"])
 
     hv.enableChannel(CONFIG["SENSOR_CHANNEL"])
     hv.enableChannel(CONFIG["TRIGGER_CHANNEL"])
@@ -46,47 +46,84 @@ def start(dgt, hv):
     print("Ready!")
     input("Press enter to start acquisition...")
 
-    max = CONFIG["MAX_EVENTS"]
-    for bias in CONFIG["SENSOR_BIAS"]:
-        print("\nNow acquiring {} events with sensor bias at {} V".format(
-            max, bias))
+    meta = {}
+    meta["max"] = CONFIG["MAX_EVENTS"]
 
+    for bias in CONFIG["SENSOR_BIAS"]:
+        meta["bias"] = bias
+        print("\nNow acquiring with sensor bias at {} V".format(meta["bias"]))
         print("Waiting for power supply... ", end = "")
-        hv.setVoltage(CONFIG["SENSOR_CHANNEL"], bias, True)
+        hv.setVoltage(CONFIG["SENSOR_CHANNEL"], meta["bias"], True)
         print("Ready!", end = "\n\n")
 
-        progress = 0
-        events = 0
-        file = tree.TreeFile(str(bias))
+        if CONFIG["MODE"] == 0:
+            acquireAtPoint(dgt, hv, 0, 0, meta, file)
+        elif CONFIG["MODE"] == 1:
+            xRange = range(CONFIG["X_START"], CONFIG["X_END"] + CONFIG["X_STEP"], CONFIG["X_STEP"])
+            for x in xRange:
+                yRange = range(CONFIG["Y_START"], CONFIG["Y_END"] + CONFIG["Y_STEP"], CONFIG["Y_STEP"])
+                for y in yRange:
+                    print("\nNow acquiring {} events with sensor bias at {} V. Position is (x = {}, y = {})".format(
+                        meta["max"], meta["bias"], x, y))
+                    if input("Press enter to continue, type 's' to skip...") == "s":
+                        continue
+                    acquireAtPoint(dgt, hv, x, y, meta, file)
+        elif CONFIG["MODE"] == 2:
+            xStart = CONFIG["X_START"]
+            xEnd = CONFIG["X_END"] + CONFIG["X_STEP"]
+            xStep = CONFIG["X_STEP"]
 
-        dgt.startAcquisition()
-        while events <= max:
-            events += acquire(dgt, file)
-            if progress < events:
-                print("Progress: {}/{} events...".format(events, max))
-                progress += int(max / PROGRESS_TICK)
+            yStart = CONFIG["Y_START"]
 
-            if abort:
-                print("Abort signal received, starting cleanup...",
-                    end = "\n\n")
-                dgt.stopAcquisition()
-                file.close()
-                cleanup(dgt, hv)
-                exit()
+            xRange = range(xStart, xEnd, xStep)
+            aspectRatio = (CONFIG["Y_END"] - yStart) / (CONFIG["X_END"] - xStart)
 
-        dgt.stopAcquisition()
+            for x in xRange:
+                print("\nNow acquiring {} events with sensor bias at {} V. Position is (x = {}, y = {})".format(
+                    meta["max"], meta["bias"], x, yStart + ((x - xStart) * aspectRatio)))
+                if input("Press enter to continue, type 's' to skip...") == "s":
+                    continue
+                acquireAtPoint(dgt, hv, x, yStart  + ((x - xStart) * aspectRatio), meta, file)
 
-        file.close()
+    file.close()
 
-    os.rename(dir, "{} to {}".format(dir, now()))
+def acquireAtPoint(dgt, hv, x, y, meta, file):
+    progress = 0
+    events = 0
+
+    meta["x"] = x
+    meta["y"] = y
+
+    dgt.startAcquisition()
+    while events <= meta["max"]:
+        dgt.trigger()
+        events += transfer(dgt, file, meta["max"] - progress, meta)
+        if progress < events:
+            print("Progress: {}/{} events...".format(events, meta["max"]))
+            progress += int(meta["max"] / PROGRESS_TICK)
+
+        if abort:
+            print("Abort signal received, starting cleanup...",
+                end = "\n\n")
+
+            dgt.stopAcquisition()
+            file.close()
+
+            cleanup(dgt, hv)
+            exit()
+
+    dgt.stopAcquisition()
 
 SAMPLING_FREQUENCIES = [5E3, 2.5E3, 1E3, 750] #MHz
 
-def acquire(dgt, file):
+def transfer(dgt, file, left, meta):
     dgt.readData() # Update local buffer with data from the digitizer
 
     num = dgt.getNumEvents() # How many events in this block?
     for i in range(num):
+        if i > left:
+            break
+
         data, info = dgt.getEvent(i, True) # Get event data and info
 
         for j in range(18):
@@ -106,6 +143,8 @@ def acquire(dgt, file):
 
         file.setFrequency(SAMPLING_FREQUENCIES[CONFIG["FREQUENCY"]])
         file.setEventLength(CONFIG["EVENT_LENGTH"])
+        file.setBias(meta["bias"])
+        file.setPosition(meta["x"], meta["y"])
 
         file.fill()
 
@@ -197,6 +236,7 @@ def programDigitizer(device):
 # ============================= UI SERVICES ===================================
 
 BOOLEAN_PARAM = {"YES": True, "NO": False}
+MODE_PARAM = {"SINGLE": 0, "GRID": 1, "DIAG": 2}
 
 def parseConfig(path, config):
     parser = configparser.ConfigParser()
@@ -216,6 +256,8 @@ def parseConfig(path, config):
             CONFIG[key] = [int(i) for i in CONFIG[key][1:-1].split(",")]
         elif param in BOOLEAN_PARAM.keys():
             CONFIG[key] = BOOLEAN_PARAM[CONFIG[key]]
+        elif param in MODE_PARAM.keys():
+            CONFIG[key] = MODE_PARAM[CONFIG[key]]
         else:
             try:
                 CONFIG[key] = int(CONFIG[key])

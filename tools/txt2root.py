@@ -11,16 +11,22 @@ class TreeFile():
         self.file = rt.TFile(path, "RECREATE", name, 9)
         self.tree = rt.TTree("wfm", "Digitizer waveform")
 
+        self.bias = array("I", [0])
+        self.tree.Branch("bias", self.bias, "bias/I")
+
         self.frequency = array("I", [0])
         self.tree.Branch("freq", self.frequency, "freq/I")
 
         self.length = array("I", [0])
         self.tree.Branch("size", self.length, "size/I")
 
+        self.pos = rt.std.vector("int")()
+        self.tree.Branch("pos", self.pos)
+
         self.channels = []
         for c in range(16):
             wave = rt.std.vector("int")()
-            self.tree.Branch("chn{}".format(c), wave)
+            self.tree.Branch("w{}".format(c), wave)
             self.channels.append(wave)
 
         self.triggers = []
@@ -36,6 +42,9 @@ class TreeFile():
     def clear(self):
         self.length[0] = 0
         self.frequency[0] = 0
+        self.bias[0] = 0
+
+        self.pos.clear()
 
         for c in self.channels:
             c.clear()
@@ -65,24 +74,29 @@ class TreeFile():
     def setEventLength(self, length):
         self.length[0] = int(length)
 
-    def getSize(self):
-        return self.size
+    def setPosition(self, x, y):
+        self.pos.push_back(int(x))
+        self.pos.push_back(int(y))
 
-    def getStart(self):
-        return self.start
+    def setBias(self, bias):
+        self.bias[0] = int(bias)
 
 
 def init():
     global orig
     global dest
-    orig = "../../wafer2-100-200-txt/wafer2-100-200-shifted"
-    dest = "../../wafer2-100-200-root/wafer2-100-200-shifted"
+    orig = "../../wafer2-100-200-txt/"
+    dest = "../../wafer2-100-200-root/all"
     os.makedirs(dest, exist_ok = True)
 
-    with Pool(8) as p:
-        p.map(convert, os.listdir(orig))
+    root = TreeFile(dest, "combined")
+    n = 0
+    for file in os.listdir(orig):
+        n += convert(file, root)
+    root.close()
+    print(n)
 
-def convert(name):
+def convert(name, root):
     global orig
     global dest
     events = []
@@ -99,10 +113,17 @@ def convert(name):
                     event[j].append(int(col))
         events.append(event)
 
-    root = TreeFile(dest, name[:-4])
     for event in events:
         root.setFrequency(5E3)
         root.setEventLength(1024)
+
+        bias = name[:-4].split("_")[0][:-1]
+        root.setBias(bias)
+
+        x = name[:-4].split("_")[1].split("y")[0][1:]
+        y = name[:-4].split("_")[1].split("y")[1]
+        root.setPosition(x, y)
+
         for i, channel in enumerate(event):
             group = int(i / 9)
             if i == 8 or i == 17:
@@ -111,7 +132,7 @@ def convert(name):
                 root.setChannel(i - group, channel, 1024)
         root.fill()
 
-    root.close()
+    return len(events)
 
 if __name__ == "__main__":
     init()

@@ -2,6 +2,7 @@ import ROOT as rt
 from array import array
 import os
 
+
 class TreeFile():
 
     def __init__(self, path, name):
@@ -10,21 +11,27 @@ class TreeFile():
         self.file = rt.TFile(path, "RECREATE", name, 9)
         self.tree = rt.TTree("wfm", "Digitizer waveform")
 
-        self.frequency = array("I", [0])
-        self.tree.Branch("freq", self.frequency, "freq/I")
+        self.bias = array("d", [0.0])
+        self.tree.Branch("bias", self.bias, "bias/d")
 
-        self.length = array("I", [0])
-        self.tree.Branch("size", self.length, "size/I")
+        self.frequency = array("d", [0.0])
+        self.tree.Branch("freq", self.frequency, "freq/d")
+
+        self.length = array("d", [0.0])
+        self.tree.Branch("size", self.length, "size/d")
+
+        self.pos = rt.std.vector("double")()
+        self.tree.Branch("pos", self.pos)
 
         self.channels = []
         for c in range(16):
-            wave = rt.std.vector("int")()
-            self.tree.Branch("chn{}".format(c), wave)
+            wave = rt.std.vector("double")()
+            self.tree.Branch("w{}".format(c), wave)
             self.channels.append(wave)
 
         self.triggers = []
         for t in range(2):
-            wave = rt.std.vector("int")()
+            wave = rt.std.vector("double")()
             self.tree.Branch("trg{}".format(t), wave)
             self.triggers.append(wave)
 
@@ -33,8 +40,11 @@ class TreeFile():
         self.clear()
 
     def clear(self):
-        self.length[0] = 0
-        self.frequency[0] = 0
+        self.length[0] = 0.0
+        self.frequency[0] = 0.0
+        self.bias[0] = 0.0
+
+        self.pos.clear()
 
         for c in self.channels:
             c.clear()
@@ -50,22 +60,23 @@ class TreeFile():
         channel = self.channels[index]
         channel.clear()
         for w in range(length):
-            channel.push_back(int(data[w]))
+            channel.push_back(float(data[w]))
 
     def setTrigger(self, index, data, length):
         trigger = self.triggers[index]
         trigger.clear()
         for t in range(length):
-            trigger.push_back(int(data[t]))
+            trigger.push_back(float(data[t]))
 
     def setFrequency(self, frequency):
-        self.frequency[0] = int(frequency)
+        self.frequency[0] = float(frequency)
 
     def setEventLength(self, length):
-        self.length[0] = int(length)
+        self.length[0] = float(length)
 
-    def getSize(self):
-        return self.size
+    def setPosition(self, x, y):
+        self.pos.push_back(float(x))
+        self.pos.push_back(float(y))
 
-    def getStart(self):
-        return self.start
+    def setBias(self, bias):
+        self.bias[0] = float(bias)

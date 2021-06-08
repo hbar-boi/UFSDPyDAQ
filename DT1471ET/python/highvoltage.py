@@ -2,7 +2,7 @@ import pyvisa as pv
 import time
 
 ALLOWED_VOLTAGE_DELTA = 1.5 # Volt
-TIME_DELAY = 0.5 # s
+TIME_DELAY = 1 # s
 
 class HighVoltage():
 
