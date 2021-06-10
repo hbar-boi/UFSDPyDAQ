@@ -12,13 +12,13 @@ class TreeFile():
         self.tree = rt.TTree("wfm", "Digitizer waveform")
 
         self.bias = array("d", [0.0])
-        self.tree.Branch("bias", self.bias, "bias/d")
+        self.tree.Branch("bias", self.bias, "bias/D")
 
         self.frequency = array("d", [0.0])
-        self.tree.Branch("freq", self.frequency, "freq/d")
+        self.tree.Branch("freq", self.frequency, "freq/D")
 
         self.length = array("d", [0.0])
-        self.tree.Branch("size", self.length, "size/d")
+        self.tree.Branch("size", self.length, "size/D")
 
         self.pos = rt.std.vector("double")()
         self.tree.Branch("pos", self.pos)
