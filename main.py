@@ -59,8 +59,11 @@ class UFSDPyDAQ:
         self.file.setFrequency(SAMPLING_FREQUENCIES[self.frequency])
         self.file.setEventLength(self.eventSize)
 
-        self.hv.enableChannel(cself.sensorChannel)
-        self.hv.enableChannel(self.triggerChannel)
+        both = [self.sensorChannel, self.triggerChannel]
+
+        self.hv.enableChannel(both)
+        self.hv.setRampUp(both, 5) # V/s
+        self.hv.setRampDown(both, 25) # V/s
         self.hvSetBlocking(self.triggerChannel, self.triggerBias)
 
         if input("Start acquisition? [y/n] ") == "n":
@@ -128,6 +131,8 @@ class UFSDPyDAQ:
                 print("Acquired {}/{} events.".format(events, self.maxEvents))
                 break
         self.dgt.stopAcquisition()
+
+        self.file.write()
 
     def poll(self, taken):
         self.dgt.readData() # Update local buffer with data from the digitizer
