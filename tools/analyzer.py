@@ -22,7 +22,6 @@ class Analyzer():
     def __init__(self, path, cache = True):
         start = time.time()
 
-
         make = False
         if cache:
             data = None

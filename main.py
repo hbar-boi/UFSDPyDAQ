@@ -68,7 +68,6 @@ def start(dgt, hv):
                     if input("Press enter to continue, type 's' to skip...") == "s":
                         continue
                     acquireAtPoint(dgt, hv, x, y, meta, file)
-                    file.Write()
         elif CONFIG["MODE"] == 2:
             xStart = CONFIG["X_START"]
             xEnd = CONFIG["X_END"] + CONFIG["X_STEP"]
