@@ -33,13 +33,13 @@ class UFSDPyDAQ:
         self.correct = config["USE_INTERNAL_CORRECTION"]
 
         # PyUSB acts weird if we try to connect the digitizer first...
-        self.hv = connectHighVoltage()
+        self.connectHighVoltage()
 
-        self.dgt = connectDigitizer()
+        self.connectDigitizer()
         self.programDigitizer()
         status = self.dgt.status()
         print("Digitizer status is {}, ".format(hex(status)), end = "")
-        if dgtStatus == 0x180:
+        if status == 0x180:
             print("good!")
         else:
             print("something's wrong. Exiting.")
@@ -116,17 +116,16 @@ class UFSDPyDAQ:
 
         events = 0
         self.dgt.startAcquisition()
-        while True
+        while True:
             if self.abort:
                 print("Abort signal received, starting cleanup...",
                     end = "\n\n")
 
                 self.dgt.stopAcquisition()
-                self.file.close()
                 self.cleanup()
                 exit()
 
-            events += self.poll(events, bias)
+            events += self.poll(events)
             if events >= self.maxEvents:
                 print("Acquired {}/{} events.".format(events, self.maxEvents))
                 break
@@ -241,7 +240,7 @@ class UFSDPyDAQ:
         self.dgt.setFastTriggerThreshold(self.triggerThresh)
 
         # Data processing
-        if correct:
+        if self.correct:
             self.dgt.loadCorrectionData(0) # Correction tables for 5 GHz operation
             self.dgt.enableCorrection()
 

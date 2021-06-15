@@ -37,21 +37,21 @@ class TreeFile():
 
     def fill(self):
         self.tree.Fill()
-        self.clear()
 
-    def clear(self):
-        self.length[0] = 0
-        self.bias[0] = 0
-        self.frequency[0] = 0
-        self.pos.clear()
-
+    def clearEvent(self):
         for c in self.channels:
             c.clear()
 
         for t in self.triggers:
             t.clear()
 
-    def write():
+    def clearMeta(self):
+        self.length[0] = 0
+        self.bias[0] = 0
+        self.frequency[0] = 0
+        self.pos.clear()
+
+    def write(self):
         self.file.Write()
 
     def close(self):
