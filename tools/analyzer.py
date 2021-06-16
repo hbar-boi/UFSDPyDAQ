@@ -76,7 +76,7 @@ class Analyzer():
 
 
     def process(self):
-        self.channels = np.array(
+        """self.channels = np.array(
             [self.removeShotPeaks(channel) for channel in self.channels])
 
         def getEarliest(data):
@@ -109,7 +109,7 @@ class Analyzer():
         self.means = np.array([self.coupleAC(
             self.average(channel)) for channel in self.channels])
 
-        print(self.integrate(self.means[0:10]))
+        print(self.integrate(self.means[0:10]))"""
 
     def parse(path, param, index):
         file = rt.TFile.Open(path, "READ")
@@ -205,6 +205,6 @@ if __name__ == "__main__":
 
     plots[11].plot(x, res.means[10], linewidth = 1)
     plots[11].set_ylabel("VREF", fontsize = 10)
-    plots[11].set_xlabel("Time [ns]", fontsize = 10)
+    plots[11].set_xlabel("Time [ns]", fontsize = 10)"""
 
     plt.show()

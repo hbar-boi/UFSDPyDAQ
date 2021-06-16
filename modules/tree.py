@@ -8,7 +8,7 @@ class TreeFile():
     def __init__(self, path, name):
         path = os.path.join(path, "{}.root".format(name))
 
-        self.file = rt.TFile(path, "RECREATE", name, 9)
+        self.file = rt.TFile(path, "RECREATE", name, 0)
         self.tree = rt.TTree("wfm", "Digitizer waveform")
 
         self.bias = array("d", [0.0])
@@ -50,7 +50,7 @@ class TreeFile():
         self.bias[0] = 0
         self.frequency[0] = 0
         self.pos.clear()
-
+        
     def write(self):
         self.file.Write()
 
