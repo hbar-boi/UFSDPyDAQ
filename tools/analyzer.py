@@ -118,7 +118,7 @@ class Analyzer():
         vector = rt.std.vector("double")()
         tree.SetBranchAddress(param, vector)
 
-        events = tree.GetEntries()
+        events = 100
         out = np.empty((events, RECORD_LENGTH))
         for e in range(events):
             tree.GetEntry(e)
@@ -170,14 +170,18 @@ class Analyzer():
 
 if __name__ == "__main__":
 
-    file = "/home/work/Github/data/prova1.root"
-    res = Analyzer(file)
+    file = "/home/work/Github/data/griglia20um.root"
+    res = Analyzer(file, False)
 
     fig, plots = plt.subplots(12, sharex = True)
     x = np.arange(0, TIME_STEP * 1024, TIME_STEP)
     titles = ["CHN{}".format(i) for i in range(9)]
 
-    plots[9].plot(x, res.channels[9][0], "-", linewidth = 1)
+    for t, channel in enumerate(res.channels[0:9]):
+        for event in (channel):
+
+            plots[t].set_ylabel(titles[t], fontsize = 10)
+            plots[t].plot(x, event, "-", linewidth = 1)
 
     """for e, event in enumerate(res.means[0:9]):
         peaks = sp.find_peaks(-event, prominence = 6)[0]
@@ -191,7 +195,7 @@ if __name__ == "__main__":
             plots[e].set_ylim([250, -150])
 
         plots[e].set_ylabel(titles[e], fontsize = 10)
-        plots[e].plot(x, event, "-", linewidth = 1)
+        plots[e].plot(x, event, "-", linewidth = 1)"""
 
     plots[9].plot(x, res.trigger, linewidth = 1)
     plots[9].set_ylabel("TRG", fontsize = 10)

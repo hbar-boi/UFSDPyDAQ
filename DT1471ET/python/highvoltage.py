@@ -56,11 +56,13 @@ class HighVoltage():
 
     def enableChannel(self, channel):
         # Implement OFF check using status bits
-        self.setQuery("ON", channel)
+        for chn in getAsList(channel):
+            self.setQuery("ON", chn)
 
     def disableChannel(self, channel, confirm = True):
-        self.setVoltage(channel, 0, confirm)
-        self.setQuery("OFF", channel)
+        for chn in channels:
+            self.setVoltage(chn, 0, confirm)
+            self.setQuery("OFF", chn)
 
     def setVoltage(self, channel, value, confirm = True):
         self.setQuery("VSET", channel, value)
@@ -69,6 +71,14 @@ class HighVoltage():
                 delta = abs(self.getVoltage(channel) - value)
                 if delta < ALLOWED_VOLTAGE_DELTA:
                     break
+
+    def setRampUp(self, channel, value):
+        for chn in getAsList(channel):
+            self.setQuery("RUP", chn, value)
+
+    def setRampDown(self, channel, value):
+        for chn in getAsList(channel):
+            self.setQuery("RDW", chn, value)
 
     def getVoltage(self, channel):
         return float(self.getQuery("VMON", channel))
@@ -109,6 +119,11 @@ class HighVoltage():
                 break
 
         return resources[int(selected)]
+
+def getAsList(data):
+    if not isinstance(data, list):
+        data = [data]
+    return data
 
 def check(msg):
     if "ERR" in msg:
