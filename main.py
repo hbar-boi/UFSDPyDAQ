@@ -87,7 +87,7 @@ class UFSDPyDAQ:
 
             # Single point
             if self.mode == 0:
-                self.acquirePoint(0, 0)
+                self.acquirePoint(xStart, yStart)
             # Grid acquisition
             elif self.mode == 1:
                 for x in range(xStart, xStop, xStep):
@@ -176,8 +176,8 @@ class UFSDPyDAQ:
         self.dgt.close()
         print("Done!", end = "\n\n")
         print("Power supply cleanup... ", end = "")
-        self.hv.disableChannel(self.sensorChannel)
-        self.hv.disableChannel(self.triggerChannel)
+        both = [self.sensorChannel, self.triggerChannel]
+        self.hv.disableChannel(both)
         print("Done!")
         print("Closing connection to power supply... ", end = "")
         self.hv.close()
@@ -231,6 +231,9 @@ class UFSDPyDAQ:
 
         # Enable or disable groups
         self.dgt.setGroupEnableMask(0b11)
+
+        for i in range(16):
+            self.dgt.setChannelDCOffset(i, 45000)
 
         # Positive polarity signals for both groups, unused but doesn't hurt
         self.dgt.setGroupTriggerPolarity(0, 0)

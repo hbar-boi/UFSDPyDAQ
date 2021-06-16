@@ -60,7 +60,7 @@ class HighVoltage():
             self.setQuery("ON", chn)
 
     def disableChannel(self, channel, confirm = True):
-        for chn in channels:
+        for chn in getAsList(channel):
             self.setVoltage(chn, 0, confirm)
             self.setQuery("OFF", chn)
 
