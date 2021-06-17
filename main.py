@@ -36,16 +36,14 @@ class UFSDPyDAQ:
         status = self.dgt.status()
         print("Digitizer status is {}, ".format(hex(status)), end = "")
         if status == 0x180:
-            print("good!")
+            formatted(" good!", FORMAT_OK)
         else:
-            print("something's wrong. Exiting.")
+            formatted("something's wrong. Exiting.", FORMAT_ERROR)
             exit()
         self.dgt.allocateEvent()
         self.dgt.mallocBuffer()
 
     def prepare(self):
-        self.abort = False
-
         dir = os.path.join(self.outputPath)
         if not os.path.exists(dir):
             os.mkdir(dir)
@@ -79,9 +77,10 @@ class UFSDPyDAQ:
         for bias in self.sensorBiases:
             self.hvSetBlocking(self.sensorChannel, bias)
             self.file.setBias(bias)
-            print("\nNow acquiring with sensor bias at {} V".format(bias))
+            formatted("\nNow acquiring with sensor bias at {} V".format(bias),
+                FORMAT_NOTE)
 
-            if not askSkipQuit(self.autoHv):
+            if not self.askSkipQuit(self.autoHv):
                 continue
             # Single point
             if self.mode == 0:
@@ -104,7 +103,8 @@ class UFSDPyDAQ:
                 xList = self.acqConfig["X_LIST"]
                 yList = self.acqConfig["Y_LIST"]
                 if len(xList) != len(yList):
-                    print("Lists have to be the same length... Exiting")
+                    formatted("Lists have to be the same length... Exiting",
+                        FORMAT_ERROR)
                     exit()
 
                 points = list(zip(xList, yList))
@@ -112,16 +112,16 @@ class UFSDPyDAQ:
                     self.acquirePoint(point[0], point[1])
 
     def acquirePoint(self, x, y):
-        print("\nNow acquiring {} events at (x = {}, y = {})".format(
-            self.maxEvents, x, y))
+        formatted("\nNow acquiring {} events at (x = {}, y = {})".format(
+            self.maxEvents, x, y), FORMAT_NOTE, "")
 
         self.stage.to(x, y, True)
         if self.autoStage:
             position = self.stage.getPosition()
-            print("Current position is (x = {}, y = {})".format(
-                position[0], position[1]))
+            formatted("Current position is (x = {:.3f}, y = {:.3f})".format(
+                position[0], position[1]), FORMAT_NOTE)
 
-        if not askSkipQuit(self.autoStage):
+        if not self.askSkipQuit(self.autoStage):
             return
         self.file.setPosition(x, y)
 
@@ -130,7 +130,8 @@ class UFSDPyDAQ:
         while True:
             events += self.poll(events)
             if events >= self.maxEvents:
-                print("Acquired {}/{} events.".format(events, self.maxEvents))
+                formatted("Acquired {}/{} events.".format(events,
+                    self.maxEvents), FORMAT_OK, "")
                 break
         self.dgt.stopAcquisition()
 
@@ -165,25 +166,30 @@ class UFSDPyDAQ:
 
     def cleanup(self):
         self.file.close()
-        print("\nDigitizer cleanup... ", end = "")
+        formatted("\nDigitizer cleanup... ", FORMAT_NOTE, "")
         self.dgt.stopAcquisition()
         self.dgt.freeEvent()
         self.dgt.freeBuffer()
-        print("Done!")
-        print("Closing connection to digitizer... ", end = "")
+        formatted("Done!", FORMAT_OK)
+        formatted("Closing connection to digitizer... ", FORMAT_NOTE, "")
         self.dgt.close()
-        print("Done!", end = "\n\n")
-        print("Power supply cleanup... ", end = "")
-        both = [self.sensorChannel, self.triggerChannel]
-        self.hv.disableChannel(both)
-        print("Done!")
-        print("Closing connection to power supply... ", end = "")
-        self.hv.close()
-        print("Done!", end = "\n\n")
-        print("Closing connection to stage...", end = "")
-        self.stage.close()
-        print("Done!", end = "\n\n")
-        print("Exiting, goodbye...")
+        formatted("Done!", FORMAT_OK)
+        if self.autoHv:
+            formatted("Power supply cleanup... ", FORMAT_NOTE, "")
+            both = [self.sensorChannel, self.triggerChannel]
+            self.hv.disableChannel(both)
+            formatted("Done!", FORMAT_OK)
+            formatted("Closing connection to power supply... ", FORMAT_NOTE, "")
+            self.hv.close()
+            formatted("Done!", FORMAT_OK)
+        if self.autoStage:
+            formatted("Stage cleanup... ", FORMAT_NOTE, "")
+            self.stage.to(0, 0)
+            formatted("Done!", FORMAT_OK)
+            formatted("Closing connection to stage...", FORMAT_NOTE, "")
+            self.stage.close()
+            formatted("Done!", FORMAT_OK)
+        formatted("Exiting, goodbye...", FORMAT_NOTE, "")
 
 # ============================ STAGE STUFF ====================================
 
@@ -193,16 +199,16 @@ class UFSDPyDAQ:
             self.stage = Nothing()
             return
 
-        print("\nConnecting to stage...", end = "")
-        self.stage = stage.Stage(self.stageConfig["X_AXIS"],
-            self.stageConfig["Y_AXIS"])
+        formatted("Connecting to stage...", FORMAT_NOTE, "")
+        axes = [self.stageConfig["X_AXIS"], self.stageConfig["Y_AXIS"]]
+        self.stage = stage.Stage(axes)
 
         if not self.stage.connected:
-            print("Fail!")
-            print("Couldn't connect to stage, exiting.")
+            formatted("Fail! Couldn't connect to stage, exiting.",
+                FORMAT_ERROR)
             exit()
 
-        print("Done! Hello stage...")
+        formatted("Done! Hello stage...", FORMAT_OK)
 
     def programStage(self):
         self.stage.setSpeed(self.stageConfig["SPEED"])
@@ -220,25 +226,25 @@ class UFSDPyDAQ:
             self.hv = Nothing()
             return
 
-        print("\nConnecting to power supply... ", end = "")
+        formatted("\nConnecting to power supply... ", FORMAT_NOTE, end = "")
         self.hv = highvoltage.HighVoltage(self.hvConfig["HIGHVOLTAGE_ID"])
         if not self.hv.connected:
-            print("Fail!")
-            print("Couldn't connect to device, exiting.")
+            formatted("Fail!", "Couldn't connect to device, exiting.",
+                FORMAT_ERROR)
             exit()
 
         hvModel = self.hv.getModel()
         if not hvModel in HIGHVOLTAGE_MODELS:
-            print("Fail!")
-            print("This model is not supported, exiting.")
+            formatted("Fail! This model is not supported, exiting.",
+                FORMAT_ERROR)
             exit()
-        print("Done! Hello " + hvModel)
+        formatted("Done! Hello " + hvModel, FORMAT_OK)
 
     def hvSetBlocking(self, channel, bias):
         if self.autoHv:
-            print("\nWaiting for power supply... ", end = "")
+            formatted("\nWaiting for power supply... ", FORMAT_NOTE, "")
             self.hv.setVoltage(channel, bias, True)
-            print("Ready!")
+            formatted("Ready!", FORMAT_OK)
 
 # ========================= DIGITIZER STUFF ===================================
 
@@ -246,19 +252,19 @@ class UFSDPyDAQ:
         self.eventSize = self.dgtConfig["EVENT_LENGTH"]
         self.frequency = self.dgtConfig["FREQUENCY"]
 
-        print("\nConnecting to digitizer... ", end = "")
+        formatted("Connecting to digitizer... ", FORMAT_NOTE, "")
         self.dgt = digitizer.Digitizer(self.dgtConfig["DIGITIZER_ID"])
         self.dgt.reset()
         dgtInfo = self.dgt.getInfo()
         dgtModel = str(dgtInfo.ModelName, "utf-8")
         if dgtModel not in DIGITIZER_MODELS:
-            print("Fail!")
-            print("This model is not supported, exiting.")
+            formatted("Fail! This model is not supported, exiting.",
+                FORMAT_ERROR)
             exit()
-        print("Done! Hello " + dgtModel)
+        formatted("Done! Hello " + dgtModel, FORMAT_OK)
 
     def programDigitizer(self):
-        print("Programming digitizer... ", end = "")
+        formatted("Programming digitizer... ", FORMAT_NOTE, end = "")
         # Data acquisition
         self.dgt.setSamplingFrequency(self.frequency)
         self.dgt.setRecordLength(self.eventSize)
@@ -296,7 +302,7 @@ class UFSDPyDAQ:
 
         self.dgt.setPostTriggerSize(
             self.dgtConfig["POST_TRIGGER_DELAY"]) # Extra time after trigger
-        print("Done!")
+        formatted("Done!", FORMAT_OK)
 
     def askSkipQuit(self, bypass):
         if bypass:
@@ -306,10 +312,23 @@ class UFSDPyDAQ:
         if prompt == "s":
             return False
         elif prompt == "q":
-            self.abort()
+            self.dgt.stopAcquisition()
+
+            self.cleanup()
+            exit()
         return True
 
 # ============================= UI SERVICES ===================================
+
+FORMAT_ERROR = "\033[91m"
+FORMAT_WARNING = "\033[93m"
+FORMAT_NOTE = "\033[94m"
+FORMAT_OK = "\033[92m"
+
+def formatted(string, format, end = "\n"):
+    print(format, end = "")
+    sys.stdout.write("\b")
+    print(string, "\033[0m", end)
 
 class Nothing():
 
@@ -333,7 +352,7 @@ def loadConfig(path):
     def parse(key):
         # Print params and make them machine-usable
         config = {}
-        print("\033[1;94m \n[{}] \x1b[0m".format(key))
+        formatted("\n[{}]".format(key), FORMAT_NOTE)
         for k, param in parser[key].items():
             print("{}: {}".format(k, param))
             if k in KEYS_ARRAY:
@@ -351,7 +370,7 @@ def loadConfig(path):
         return config
 
     config = {key:parse(key) for key in parser.sections()}
-    print("\nDone!", end = "\n\n")
+    formatted("\nDone!", FORMAT_OK)
     return config
 
 if __name__ == "__main__":

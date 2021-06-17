@@ -75,6 +75,10 @@ class Axis():
         settings.MicrostepMode = value
         check(API.set_engine_settings(self.axis, byref(settings)))
 
+        new = MotorSettings()
+        check(API.get_engine_settings(self.axis, byref(new)))
+        print(new.MicrostepMode)
+
     def setSpeed(self, value):
         if value > MAX_STEP_SPEED:
             print("Speed is too high!")
@@ -111,12 +115,11 @@ class Stage():
         if not self.connected:
             return
 
-        self.units = CustomUnits()
-        self.units.A = 0.31 # um/step
-        self.units.MicrostepMode = 0x04 # 1/8 usteps
+        self.setMicrostep(0x09) # 1/256 usteps
 
-        self.setZero()
-        self.setMicrostep(0x04) # 1/8 usteps
+        self.units = CustomUnits()
+        self.units.A = 2.496 # um/step
+        self.units.MicrostepMode = 0x09 # 1/256 usteps
 
     def getDeviceCount(self):
         return API.get_device_count(self.devices)
@@ -134,11 +137,15 @@ class Stage():
             axis.setMicrostep(value)
 
     def to(self, x, y, wait = True):
-        self.axes[0].to(x, False)
+        self.axes[0].to(x, wait)
         self.axes[1].to(y, wait)
 
     def getPosition(self):
         return [axis.getPosition() for axis in self.axes]
+
+    def setSpeed(self, value):
+        for axis in self.axes:
+            axis.setSpeed(value)
 
     def close(self):
         for axis in self.axes:

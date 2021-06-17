@@ -170,7 +170,7 @@ class Analyzer():
 
 if __name__ == "__main__":
 
-    file = "/home/work/Github/data/griglia20um.root"
+    file = "/home/work/Github/data2/lolxd2.root"
     res = Analyzer(file, False)
 
     fig, plots = plt.subplots(12, sharex = True)
@@ -197,13 +197,13 @@ if __name__ == "__main__":
         plots[e].set_ylabel(titles[e], fontsize = 10)
         plots[e].plot(x, event, "-", linewidth = 1)"""
 
-    plots[9].plot(x, res.trigger, linewidth = 1)
-    plots[9].set_ylabel("TRG", fontsize = 10)
+    """plots[9].plot(x, res.trigger, linewidth = 1)
+    plots[9].set_ylabel("TRG", fontsize = 10)"""
 
-    plots[10].plot(x, res.means[9], linewidth = 1)
-    plots[10].set_ylabel("DC", fontsize = 10)
+    """plots[10].plot(x, res.means[9], linewidth = 1)
+    plots[10].set_ylabel("DC", fontsize = 10)"""
 
-    plots[11].plot(x, res.means[10], linewidth = 1)
+    """plots[11].plot(x, res.means[10], linewidth = 1)
     plots[11].set_ylabel("VREF", fontsize = 10)
     plots[11].set_xlabel("Time [ns]", fontsize = 10)"""
 
