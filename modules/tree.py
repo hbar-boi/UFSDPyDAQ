@@ -2,13 +2,12 @@ import ROOT as rt
 from array import array
 import os
 
-
 class TreeFile():
 
-    def __init__(self, path, name):
+    def __init__(self, path, name, compression = 0):
         path = os.path.join(path, "{}.root".format(name))
 
-        self.file = rt.TFile(path, "RECREATE", name, 0)
+        self.file = rt.TFile(path, "CREATE", name, compression)
         self.tree = rt.TTree("wfm", "Digitizer waveform")
 
         self.bias = array("d", [0.0])
@@ -50,7 +49,7 @@ class TreeFile():
         self.bias[0] = 0
         self.frequency[0] = 0
         self.pos.clear()
-        
+
     def write(self):
         self.file.Write()
 
