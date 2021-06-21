@@ -1,37 +1,51 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import ROOT as rt
+from array import array
+
 
 def init():
-    name = "../../../wafer2-100-200-txt/means.txt"
-    with open(name, "r") as f:
-        dict = eval(f.read())
-        xmax = 0
-        ymax = 0
-        for a in dict.items():
-            pos = eval(a[0])
-            xmax = max(xmax, pos[0])
-            ymax = max(ymax, pos[1])
-            channels = a[1]
-            for i, channel in enumerate(channels):
-                channels[i] = 0 if channel == None else abs(channel)
+    channels = np.zeros((1010, 1010))
+    for i in [0, 2]:
+        channels += channel(i)
 
-        arr = np.zeros((xmax + 1, ymax + 1), dtype = "float")
+    def out(d, q):
+        return (channels)[d, q]
 
-        for k in dict.items():
-            pos = eval(k[0])
-            x = pos[0]
-            y = pos[1]
-            for l in range(x-100, x-50):
-                for s in range(y-50, y):
-                    try:
-                        for m in range(0, 9):
-                            arr[l][s] += k[1][m]
-                    except:
-                        pass
+    m = np.arange(0, 1010, 10)
+    n = np.arange(0, 1010, 10)
+    x, y = np.meshgrid(m, n)
 
-        plt.imshow(arr, cmap = "hot", interpolation = "nearest")
-        plt.show()
+    z = out(x, y)
+    fig, ax = plt.subplots(1, figsize = (7, 7))
+    ax.set_ylabel("um", fontsize = 10)
+    ax.set_xlabel("um", fontsize = 10)
+    ax.pcolormesh(x, y, z, shading = "auto", cmap = "Blues")
+    plt.show()
 
+def channel(id):
+    out = np.zeros((1010, 1010))
+
+    for i in ["", "-2"]:
+        file = rt.TFile.Open("/media/work/Waveforms/run4/analysis/chn{}/heatmap{}.root".format(id, i), "READ")
+        tree = file.Get("heat")
+
+        map = array("d", [0.0])
+        tree.SetBranchAddress("heat", map)
+
+        pos = rt.std.vector("double")()
+        tree.SetBranchAddress("pos", pos)
+
+        for e in range(tree.GetEntries()):
+            tree.GetEntry(e)
+
+            x = int(pos[0])
+            y = int(pos[1])
+            out[x][y] = map[0]
+
+        file.Close()
+
+    return out
 
 if __name__ == "__main__":
     init()
