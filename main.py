@@ -1,14 +1,12 @@
-from modules import highvoltage, digitizer, tree, stage
-
+from modules import *
 import configparser, sys, os, datetime, time
-from pynput import keyboard
 
 CONFIG_PATH = "config.ini"
 
 DIGITIZER_MODELS = ["DT5742"]
 HIGHVOLTAGE_MODELS = ["DT1471ET"]
 
-PROGRESS_TICK = 4
+SAMPLING_FREQUENCIES = [5E3, 2.5E3, 1E3, 750] # MHz
 
 class UFSDPyDAQ:
 
@@ -49,7 +47,6 @@ class UFSDPyDAQ:
             os.mkdir(dir)
         self.file = tree.TreeFile(dir, self.outputFile)
 
-        SAMPLING_FREQUENCIES = [5E3, 2.5E3, 1E3, 750] # MHz
         self.file.setFrequency(SAMPLING_FREQUENCIES[self.frequency])
         self.file.setEventLength(self.eventSize)
 
