@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+
+# CAEN DT5742 control module, not all original API features supported.
+
 from ctypes import *
 import time
 
@@ -54,6 +58,7 @@ API = CDLL("/usr/lib/" + SO_FILENAME)
 class Digitizer:
 
     def __init__(self, number):
+        self.connected = False
         # This will keep track of the connection to our device
         self.handle = self.open(number)
 
@@ -88,14 +93,17 @@ class Digitizer:
         address = c_uint32(0) # Base address (unused, set to 0)
         handle = c_int() # Handle object, keep track of our connection
 
-        check(API.CAEN_DGTZ_OpenDigitizer(device, c_int(number),
-            conet, address, byref(handle)))
+        if API.CAEN_DGTZ_OpenDigitizer(device, c_int(number),
+            conet, address, byref(handle)) != 0:
+            return
 
+        self.connected = True
         return handle
 
     # Close connection
     def close(self):
         check(API.CAEN_DGTZ_CloseDigitizer(self.handle))
+        self.connected = False
 
     # Reset digitizer registers
     def reset(self):
@@ -111,7 +119,7 @@ class Digitizer:
         check(API.CAEN_DGTZ_ReadRegister(
             self.handle, c_uint32(address), byref(dest)))
 
-    # How is this going to work?
+    # How is the digitizer going to work?
     # Mode: 0 -> Software controlled
     # ...other modes
     def setAcquisitionMode(self, mode):
@@ -185,7 +193,7 @@ class Digitizer:
     # Since the digitizer has 16 bit ADCs this means _offset_ takes values
     # from 0 to 65536 (= 0xFFFF, 0b1111111111111111, 2^16... you get the point)
     # It might be useful to set this to half the max value for signals that
-    # span both polarities.
+    # span both polarities. NOTE: this seems to be rather nonlinear...
     def setFastTriggerDCOffset(self, offset):
         # For our digitizer model we only have one TRn input, shared between
         # the two groups. We only care about that one and that's what the
@@ -240,6 +248,7 @@ class Digitizer:
 
 # ============================== DATA CAPTURE =================================
 
+    # Manually trigger the digitizer, might be useful when testing stuff...
     def trigger(self):
         check(API.CAEN_DGTZ_SendSWtrigger(
             self.handle))
@@ -348,7 +357,8 @@ class Digitizer:
 # Simply check that the API function returned 0L
 def check(code):
     if code != 0:
-        print("\nDigitizer: an error occurred during the last operation. Code: " + str(code))
+        print("\nDigitizer: an error occurred during the last operation. \
+            Code: {}".format(code))
 
 # All digitizer functions return a long, indicating the operation outcome.
 # Make ctypes be aware of that.

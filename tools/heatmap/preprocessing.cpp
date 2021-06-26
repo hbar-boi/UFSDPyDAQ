@@ -130,7 +130,7 @@ void work(int which) {
     in->Close();
 }
 
-void heatmap() {
+void preprocessing() {
     for(int p = 9; p < 10; p++) {
         work(p);
     }

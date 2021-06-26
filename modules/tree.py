@@ -2,13 +2,16 @@ import ROOT as rt
 from array import array
 import os
 
+MAX_FILE_SIZE = 500 # GB
+
 class TreeFile():
 
     def __init__(self, path, name, compression = 0):
         path = os.path.join(path, "{}.root".format(name))
 
         self.file = rt.TFile(path, "CREATE", name, compression)
-        self.tree = rt.TTree("wfm", "Digitizer waveform")
+        self.tree = rt.TTree("wfm", "Digitizer waveforms")
+        self.tree.SetMaxTreeSize(MAX_FILE_SIZE * 10E9)
 
         self.bias = array("d", [0.0])
         self.tree.Branch("bias", self.bias, "bias/D")

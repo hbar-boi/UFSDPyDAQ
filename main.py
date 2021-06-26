@@ -55,9 +55,7 @@ class UFSDPyDAQ:
 
         both = [self.sensorChannel, self.triggerChannel]
 
-        self.hv.enableChannel(both)
-        self.hv.setRampUp(both, 5) # V/s
-        self.hv.setRampDown(both, 25) # V/s
+        self.hv.enableChannel(self.biasChannels)
         self.hvSetBlocking(self.triggerChannel, self.triggerBias)
 
         if input("Start acquisition? [y/n] ") == "n":
@@ -115,7 +113,7 @@ class UFSDPyDAQ:
         formatted("\nNow acquiring {} events at (x = {}, y = {})".format(
             self.maxEvents, x, y), FORMAT_NOTE, "")
 
-        self.stage.to(x, y, True)
+        self.stage.to2d(x, y, True)
         if self.autoStage:
             position = self.stage.getPosition()
             formatted("Current position is (x = {:.3f}, y = {:.3f})".format(
@@ -166,29 +164,36 @@ class UFSDPyDAQ:
 
     def cleanup(self):
         self.file.close()
+
         formatted("\nDigitizer cleanup... ", FORMAT_NOTE, "")
         self.dgt.stopAcquisition()
         self.dgt.freeEvent()
         self.dgt.freeBuffer()
         formatted("Done!", FORMAT_OK)
+
         formatted("Closing connection to digitizer... ", FORMAT_NOTE, "")
         self.dgt.close()
         formatted("Done!", FORMAT_OK)
+
         if self.autoHv:
             formatted("Power supply cleanup... ", FORMAT_NOTE, "")
             both = [self.sensorChannel, self.triggerChannel]
             self.hv.disableChannel(both)
             formatted("Done!", FORMAT_OK)
+
             formatted("Closing connection to power supply... ", FORMAT_NOTE, "")
             self.hv.close()
             formatted("Done!", FORMAT_OK)
+
         if self.autoStage:
             formatted("Stage cleanup... ", FORMAT_NOTE, "")
-            self.stage.to(0, 0)
+            self.stage.to2d(0, 0)
             formatted("Done!", FORMAT_OK)
+
             formatted("Closing connection to stage...", FORMAT_NOTE, "")
             self.stage.close()
             formatted("Done!", FORMAT_OK)
+
         formatted("Exiting, goodbye...", FORMAT_NOTE, "")
 
 # ============================ STAGE STUFF ====================================
@@ -200,8 +205,9 @@ class UFSDPyDAQ:
             return
 
         formatted("Connecting to stage...", FORMAT_NOTE, "")
-        axes = [self.stageConfig["X_AXIS"], self.stageConfig["Y_AXIS"]]
-        self.stage = stage.Stage(axes)
+        self.stage = stage.Stage({
+            "x": self.stageConfig["X_AXIS"],
+            "y": self.stageConfig["Y_AXIS"]})
 
         if not self.stage.connected:
             formatted("Fail! Couldn't connect to stage, exiting.",
@@ -220,6 +226,8 @@ class UFSDPyDAQ:
         self.triggerChannel = self.hvConfig["TRIGGER_CHANNEL"]
         self.triggerBias = self.hvConfig["TRIGGER_BIAS"]
         self.sensorBiases = self.hvConfig["SENSOR_BIAS"]
+
+        self.biasChannels = [self.sensorChannel, self.triggerChannel]
 
         self.autoHv = not self.hvConfig["MANUAL"]
         if not self.autoHv:
@@ -240,6 +248,10 @@ class UFSDPyDAQ:
             exit()
         formatted("Done! Hello " + hvModel, FORMAT_OK)
 
+    def programHighVoltage(self):
+        self.hv.setRampUp(self.biasChannels, self.hvConfig["RAMP_UP_RATE"])
+        self.hv.setRampDown(self.biasChannels, self.hvConfig["RAMP_DOWN_RATE"])
+
     def hvSetBlocking(self, channel, bias):
         if self.autoHv:
             formatted("\nWaiting for power supply... ", FORMAT_NOTE, "")
@@ -254,6 +266,11 @@ class UFSDPyDAQ:
 
         formatted("Connecting to digitizer... ", FORMAT_NOTE, "")
         self.dgt = digitizer.Digitizer(self.dgtConfig["DIGITIZER_ID"])
+        if not self.dgt.connected:
+            formatted("Fail! Couldn't connect to device, exiting.",
+                FORMAT_ERROR)
+            exit()
+
         self.dgt.reset()
         dgtInfo = self.dgt.getInfo()
         dgtModel = str(dgtInfo.ModelName, "utf-8")
@@ -261,6 +278,7 @@ class UFSDPyDAQ:
             formatted("Fail! This model is not supported, exiting.",
                 FORMAT_ERROR)
             exit()
+
         formatted("Done! Hello " + dgtModel, FORMAT_OK)
 
     def programDigitizer(self):
@@ -272,7 +290,7 @@ class UFSDPyDAQ:
         self.dgt.setAcquisitionMode(0) # Software controlled
         self.dgt.setExtTriggerInputMode(0) # Disable TRG IN trigger
 
-        #device.writeRegister(0x8004, 1<<3) # Enable test pattern
+        # device.writeRegister(0x8004, 1<<3) # Enable test pattern
 
         self.dgt.setFastTriggerMode(1) # Enable TR0 trigger
         self.dgt.setFastTriggerDigitizing(1) # Digitize TR0
