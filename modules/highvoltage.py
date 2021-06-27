@@ -134,7 +134,7 @@ class HighVoltage():
         resources = self.rm.list_resources()
         num = len(resources)
         if num == 0:
-            print("Fail!, No devices found, exiting.")
+            print("Fail! No devices found, exiting.")
             exit()
 
         print("\nNo resource specified, please select one now...",
