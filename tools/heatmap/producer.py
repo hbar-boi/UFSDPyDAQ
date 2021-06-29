@@ -27,11 +27,11 @@ def channel(id):
     out = np.zeros((1010, 1010))
 
     for i in ["", "-2"]:
-        file = rt.TFile.Open("/media/work/Waveforms/run4/analysis/chn{}/heatmap{}.root".format(id, i), "READ")
-        tree = file.Get("heat")
+        file = rt.TFile.Open("/media/work/Waveforms/run4/analysis/amplitudes/100-200{}.root".format(i), "READ")
+        tree = file.Get("data")
 
         map = array("d", [0.0])
-        tree.SetBranchAddress("heat", map)
+        tree.SetBranchAddress("amp0", map)
 
         pos = rt.std.vector("double")()
         tree.SetBranchAddress("pos", pos)
@@ -41,7 +41,8 @@ def channel(id):
 
             x = int(pos[0])
             y = int(pos[1])
-            out[x][y] = map[0]
+            out[x][y] += map[0]
+            print(map[0])
 
         file.Close()
 

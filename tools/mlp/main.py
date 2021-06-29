@@ -15,59 +15,54 @@ from scipy.stats import norm
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 
-def init():
-    data = np.zeros((101, 101, 9))
+INPUT_PATH = "/home/work/Desktop/100-200.root"
+#INPUT_PATH = "/media/work/Waveforms/run4/analysis/amplitudes/100-200.root"
 
-    for chn in range(9):
-        for i in ["", "-2"]:
-            print("/media/work/Waveforms/run4/analysis/chn{}/heatmap{}.root".format(chn, i))
-            file = rt.TFile.Open("/media/work/Waveforms/run4/analysis/chn{}/heatmap{}.root".format(chn, i), "READ")
-            tree = file.Get("heat")
+FIRST_CHANNEL = 0
+LAST_CHANNEL = 10
 
-            map = array("d", [0.0])
-            tree.SetBranchAddress("heat", map)
+NUM_CHANNELS = LAST_CHANNEL - FIRST_CHANNEL
 
-            pos = rt.std.vector("double")()
-            tree.SetBranchAddress("pos", pos)
+def train(x, y):
+    print(y)
+    x_train, x_test, y_train, y_test = train_test_split(x, y, random_state=1, test_size=0.3)
+    reg = MLPRegressor(hidden_layer_sizes=(100), random_state=1, max_iter=500).fit(x_train, y_train)
 
-            for e in range(tree.GetEntries()):
-                tree.GetEntry(e)
-
-                x = int(pos[0] / 10)
-                y = int(pos[1] / 10)
-                data[x][y][chn] = map[0]
-
-            file.Close()
-        #heatmap(data.transpose((2, 0, 1))[chn])
-
-    x = data.reshape((10201, 9))
-    y = np.array([np.array([x, y]) for x in range(0, 1010, 10) for y in range(0, 1010, 10)])
-
-    x_train, x_test, y_train, y_test = train_test_split(x, y, random_state=1, test_size=0.01)
-    reg = MLPRegressor().fit(x_train, y_train)
-
-# %%
     y_test_predicted = reg.predict(x_test)
     print("Test Score: "+ str(reg.score(x_test, y_test)))
 
     y_test_resolution = y_test - y_test_predicted
     print(y_test_resolution)
 
-def heatmap(data):
-    m = np.arange(0, 101)
-    n = np.arange(0, 101)
-    x, y = np.meshgrid(m, n)
+def init():
+    file = rt.TFile.Open(INPUT_PATH, "READ")
+    data = file.Get("data")
 
-    def out(d, q):
-        return (data)[d, q]
+    # Input tree setup
+    position = rt.std.vector("double")()
+    data.SetBranchAddress("pos", position)
 
-    z = out(x, y)
-    fig, ax = plt.subplots(1, figsize = (9, 7))
-    ax.set_ylabel("um", fontsize = 10)
-    ax.set_xlabel("um", fontsize = 10)
-    mesh = ax.pcolormesh(x, y, z, shading = "auto", cmap = "Blues")
-    fig.colorbar(mesh, ax = ax)
-    plt.show()
+    amplitudes = []
+    for chn in range(FIRST_CHANNEL, LAST_CHANNEL + 1):
+        amplitudes.append(array("d", [0.0]))
+        data.SetBranchAddress("amp{}".format(chn), amplitudes[chn])
+
+    points = data.GetEntries()
+    out = np.zeros((points, NUM_CHANNELS + 1))
+    xy = np.zeros((points, 2))
+    for point in range(points):
+            data.GetEntry(point)
+            out[point] = np.array([amplitude[0] for amplitude in amplitudes])
+            xy[point] = np.array(position)
+
+            if point % 100 == 0:
+                print("Progress: {}/{}".format(point, points))
+
+    data.ResetBranchAddresses()
+    file.Close()
+
+    out = np.nan_to_num(out)
+    train(out, xy)
 
 if __name__ == "__main__":
     init()
