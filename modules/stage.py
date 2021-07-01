@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # Standa 8MTF control module, not all original API features supported.
 
 from ctypes import *
@@ -45,7 +43,7 @@ class Position(Structure):
 		("Position", c_float),
 		("EncPosition", c_longlong)]
 
-SO_FILENAME = "libximc.so"
+SO_FILENAME = "libximc.so.7"
 API = CDLL("/usr/lib/" + SO_FILENAME)
 
 # Absolute maximum speed in steps/min

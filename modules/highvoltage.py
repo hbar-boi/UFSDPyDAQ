@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # CAEN DT1471ET control module, not all original features supported.
 
 import pyvisa as pv

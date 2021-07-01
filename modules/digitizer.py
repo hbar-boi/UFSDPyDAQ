@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # CAEN DT5742 control module, not all original API features supported.
 
 from ctypes import *

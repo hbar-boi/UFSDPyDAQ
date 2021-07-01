@@ -79,10 +79,10 @@ class Config():
         self.acq, self.dgt, self.hv, self.stage = acq, dgt, hv, stage
 
     def getGrid(self, inclusive = True):
-        xStop = self.acq["X_STOP"]
+        xStop = self.acq["X_END"]
         xStep = self.acq["X_STEP"]
 
-        yStop = self.acq["Y_STOP"]
+        yStop = self.acq["Y_END"]
         yStep = self.acq["Y_STEP"]
 
         if inclusive:
@@ -122,7 +122,7 @@ class Config():
 
     @property
     def frequencyValue(self):
-        return FREQUENCY_VALUES[self.frequency]
+        return SAMPLING_FREQUENCIES[self.frequency]
 
     @property
     def triggerOffset(self):

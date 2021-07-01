@@ -4,7 +4,7 @@ import sys, os, datetime, time
 CONFIG_PATH = "config.ini"
 
 DIGITIZER_MODELS = ["DT5742"]
-HIGHVOLTAGE_MODELS = ["DT1471ET"]
+HIGHVOLTAGE_MODELS = ["DT1471ET", "DT1470ET"]
 
 class UFSDPyDAQ:
 
@@ -33,7 +33,7 @@ class UFSDPyDAQ:
         dir = self.config.outputPath
         if not os.path.exists(dir):
             os.mkdir(dir)
-        self.file = tree.TreeFile(dir, self.config.outputFile)
+        self.file = io.tree.TreeFile(dir, self.config.outputFile)
 
         self.file.setFrequency(self.config.frequencyValue)
         self.file.setEventLength(self.config.eventSize)
@@ -101,6 +101,7 @@ class UFSDPyDAQ:
         events = 0
         self.dgt.startAcquisition()
         while True:
+            self.dgt.trigger()
             events += self.poll(events, target)
             if events >= target:
                 formatted("Acquired {}/{} events.".format(events,
@@ -324,7 +325,7 @@ class Nothing():
 if __name__ == "__main__":
     args = sys.argv
 
-    configPath = None
+    configPath = CONFIG_PATH
     if len(args) == 2:
         configPath = args[1]
 
