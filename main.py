@@ -101,7 +101,6 @@ class UFSDPyDAQ:
         events = 0
         self.dgt.startAcquisition()
         while True:
-            self.dgt.trigger()
             events += self.poll(events, target)
             if events >= target:
                 formatted("Acquired {}/{} events.".format(events,
